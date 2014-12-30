@@ -1,0 +1,24 @@
+{
+  "name": "noinfopath-sync",
+  "version": "0.0.1",
+  "description": "Sync module for noInfoPath",
+  "main": "noinfopath-sync.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Interactive Multimedia Group, Inc.",
+  "license": "ISC",
+  "devDependencies": {
+    "grunt": "^0.4.5",
+    "grunt-bower-task": "^0.4.0",
+    "grunt-contrib-watch": "^0.6.1",
+    "jasmine-core": "^2.1.3",
+    "karma": "^0.12.28",
+    "karma-chrome-launcher": "^0.1.7",
+    "karma-html-reporter": "^0.2.4",
+    "karma-jasmine": "^0.3.3"
+  },
+  "dependencies": {
+    "angular": "^1.3.8"
+  }
+}
