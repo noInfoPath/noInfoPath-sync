@@ -14,9 +14,9 @@ module.exports = function(config) {
 
     // list of files / patterns to load in the browser
     files: [
-     'lib/angular/angular.js',
-     'lib/angular-mocks/angular-mocks.js',
-     'lib/noinfopath-logger/noinfopath-logger.js',
+     'node_modules/angular/angular.js',
+     'node_modules/angular-mocks/angular-mocks.js',
+     'node_modules/noinfopath-logger/noinfopath-logger.js',
      'noinfopath-sync.js',
      'test/**/*.*'
     ],

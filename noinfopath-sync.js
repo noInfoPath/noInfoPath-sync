@@ -18,7 +18,7 @@
 				endpointUri = "/ping",
 				tests = {};
 
-			tests.ping = ['$interval', '$http', 'noLogService', '$rootScope', 'NOSYNC_CONSTANTS', function($interval, $http, log, $rootScope, NOSYNC){
+			tests.ping = ['$interval', '$http', '$rootScope', 'NOSYNC_CONSTANTS', function($interval, $http, $rootScope, NOSYNC){
 				var SELF = this;
 
 				function ping() {
