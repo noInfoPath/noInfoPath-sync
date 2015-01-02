@@ -1,0 +1,17 @@
+{
+  "name": "noinfopath-sync",
+  "main": "noinfopath-sync.js",
+  "version": "0.0.1",
+  "authors": [
+    "noInfoPath <info@noinfopath.com>"
+  ],
+  "description": "noInfoPath sync module",
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
