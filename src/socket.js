@@ -1,14 +1,16 @@
 //socket.js
-(function(angular, io){
+(function(angular, io) {
 	"use strict";
 
 	angular.module("noinfopath.sync")
-		.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLogService", "noLoginService", "noTransactionCache", function($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLogService, noLoginService, noTransactionCache){
+		.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLogService", "noLoginService", "noTransactionCache", "lodash", function($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLogService, noLoginService, noTransactionCache, _) {
 			var noSync_lastSyncVersion = "noSync_lastSyncVersion",
 				noSync_getRemoteChanges = "remoteChanges",
 				noSync_sendLocalChanges = "localChanges",
 				noSync_newChangesAvailable = "newChangesAvailable",
-				cancelTimer, tovi = 0, oneSecond = 1000, db, socket;
+				cancelTimer, tovi = 0,
+				oneSecond = 1000,
+				db, socket;
 
 			function lastSyncVersion() {
 				var v = noLocalStorage.getItem(noSync_lastSyncVersion);
@@ -16,44 +18,54 @@
 				return v ? v.version : 0;
 			}
 
-			function timeOutValue(reset){
-				var tovs = [5, 25, 125, 25];
+			function timeOutValue(reset) {
+				var tovs = [5, 25, 10, 25];
 
-				if(reset || tovi >= tovs.length) tovi = 0;
+				if (reset || tovi >= tovs.length) tovi = 0;
 
 				return tovs[tovi++] * oneSecond;
 			}
 
-			function stopMonitoring(){
-				if(cancelTimer){
-					$timeout.cancel(cancelTimer);
+			function stopMonitoring() {
+				if (cancelTimer) {
+					//$timeout.cancel(cancelTimer);
+					cancelTimer();
 				}
 			}
 
-			function importChanges(syncData){
-				return $q(function(resolve, reject){
+			function importChanges(syncData) {
+				return $q(function(resolve, reject) {
 
-					var ci = 0, ver = lastSyncVersion();
+					var ci = 0,
+						ver = lastSyncVersion(),
+						changes = _.sortBy(syncData.changes, "version");
 
-					function recurse(){
-						var change = syncData.changes[ci++],
+					function recurse() {
+						if (!changes) {
+							reject("No changes received due to server side error.");
+							return;
+						}
+
+						var change = changes[ci++],
 							table;
 
-						if(change){
-							if(change.version > ver) {
+						if (change) {
+							if (change.version > ver) {
 								noLogService.info("Importing: ", change);
 								table = db[change.tableName];
 								table.noUpsert(change.values)
 									.then(recurse)
-									.catch(function(err){
+									.catch(function(err) {
 										noLogService.error(err);
 										recurse();
 									});
-							}else{
+							} else {
 								recurse();
 							}
-						}else{
-							noLocalStorage.setItem(noSync_lastSyncVersion, {version: syncData.version});
+						} else {
+							noLocalStorage.setItem(noSync_lastSyncVersion, {
+								version: syncData.version
+							});
 							resolve();
 						}
 					}
@@ -62,42 +74,64 @@
 				});
 			}
 
-			function checkForRemoteChanges(){
-				noLogService.info("Checking for remote changes");
-				return $q(function(resolve, reject){
-					var req = {
-						user: noLoginService.user.userId,
-						lastSyncVersion: lastSyncVersion()
-					};
+			function monitorRemoteChanges(version) {
+				var lv = lastSyncVersion();
 
-					socket.emit(noSync_getRemoteChanges, req, function(syncData){
-						noLogService.log(syncData);
-						importChanges(syncData)
-							.then(resolve)
-							.catch(reject);
-					});
-				});
+				if (!$rootScope.sync.inProgress) {
+
+					noLogService.info("Version Check: Local version: " + lv + ", Remote version: " + version.version);
+					if (lv < version.version) {
+						$rootScope.sync.inProgress = true;
+						noLogService.info("New data changes are available...");
+
+						var req = {
+							user: noLoginService.user.userId,
+							lastSyncVersion: lv - 1
+						};
+
+						socket.emit(noSync_getRemoteChanges, req, function(syncData) {
+							noLogService.log("Data received: \n# of changes: " + syncData.changes.length);
+							importChanges(syncData)
+								.then(function() {
+									noLogService.log("Lastest changes have been imported.");
+								})
+								.catch(function(err) {
+									noLogService.error(err);
+
+								})
+								.finally(function() {
+									$rootScope.sync.inProgress = false;
+									noLocalStorage.setItem(noSync_lastSyncVersion, {
+										version: version.version
+									});
+								});
+						});
+
+
+					}
+				}
+
 			}
 
-			function digestLocalChanges(){
-				return $q(function(resolve, reject){
-					var d = 0, data = [];
+			function digestLocalChanges() {
+				return $q(function(resolve, reject) {
+					var d = 0,
+						data = [];
 
-					function recurse(){
+					function recurse() {
 						var datum = data[d++];
 
-						socket.emit(noSync_sendLocalChanges, datum, function(resp){
+						socket.emit(noSync_sendLocalChanges, datum, function(resp) {
 							noLogService.log(resp);
 							noTransactionCache.markTransactionSynced(datum)
-								.then(function(result){
-									if(d < data.length)
-									{
+								.then(function(result) {
+									if (d < data.length) {
 										recurse();
 									} else {
 										resolve();
 									}
 								})
-								.catch(function(err){
+								.catch(function(err) {
 									noLogService.error(err);
 								});
 						});
@@ -105,23 +139,25 @@
 					}
 
 					noTransactionCache.getAllPending()
-						.then(function(resp){
+						.then(function(resp) {
 							data = resp;
+							console.log("Local changes: " + !!resp ? resp.length : 0);
 
 							$rootScope.sync.inProgress = data.length;
 
-							if($rootScope.sync.inProgress){
-								noLogService.info("Local changes detected.");
+							if ($rootScope.sync.inProgress) {
 								recurse();
-							}else{
+							} else {
 								noTransactionCache.dropAllSynced();
 								resolve();
 							}
 
 						})
-						.catch(function(err){
-							$rootScope.sync.inProgress = false;
+						.catch(function(err) {
 							noLogService.error(err);
+						})
+						.finally(function(){
+							$rootScope.sync.inProgress = false;
 						});
 
 				});
@@ -129,30 +165,31 @@
 
 			}
 
-			function monitorLocalChanges(){
+			function monitorLocalChanges() {
 				noLogService.info("Monitoring local changes.");
-				cancelTimer = $timeout(runChecks, timeOutValue());
+				//cancelTimer = $timeout(runChecks, timeOutValue());
 
+				cancelTimer = $rootScope.$on("noTransactionCache::localDataUpdated", runChecks);
 			}
 
-			function runChecks(){
-				checkForRemoteChanges()
-					.then(digestLocalChanges)
-					.then(monitorLocalChanges)
-					.catch(function(err){
+			function runChecks() {
+				digestLocalChanges()
+					.catch(function(err) {
 						noLogService.error(err);
-					});
+
+					})
+					.finally(monitorLocalChanges);
 			}
 
 			function stateChanged(n) {
 				var fns = {
-						"connected": function(){
+						"connected": function() {
 							runChecks();
 						},
-						"disconnected": function(){
+						"disconnected": function() {
 							stopMonitoring();
 						},
-						"connecting": function(){
+						"connecting": function() {
 
 						},
 						"undefined": angular.noop
@@ -163,7 +200,7 @@
 
 			}
 
-			this.configure = function(){
+			this.configure = function() {
 				var config = noConfig.current.noSync,
 					dsConfig = config.noDataSource,
 					provider = $injector.get(dsConfig.dataProvider);
@@ -173,50 +210,72 @@
 				socket = io(config.url);
 
 				//Map socket.io events to Angular events
-				socket.on("connect", function(){
-					$rootScope.sync = {state: "connected"};
+				socket.on("connect", function() {
+					$rootScope.sync = {
+						state: "connected"
+					};
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
-				socket.on("connect_error", function(err){
-					$rootScope.sync = {state: "disconnected", error: err};
+				socket.on(noSync_newChangesAvailable, monitorRemoteChanges);
+
+				socket.on("connect_error", function(err) {
+					$rootScope.sync = {
+						state: "disconnected",
+						error: err
+					};
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
-				socket.on("connect_timeout", function(err){
-					$rootScope.sync = {state: "disconnected"};
+				socket.on("connect_timeout", function(err) {
+					$rootScope.sync = {
+						state: "disconnected"
+					};
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
-				socket.on("reconnect", function(count){
-					$rootScope.sync = {state: "connecting", attempts: count};
+				socket.on("reconnect", function(count) {
+					$rootScope.sync = {
+						state: "connecting",
+						attempts: count
+					};
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
-				socket.on("reconnect_attempt", function(){
-					$rootScope.sync = {state: "connecting"};
+				socket.on("reconnect_attempt", function() {
+					$rootScope.sync = {
+						state: "connecting"
+					};
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
-				socket.on("reconnecting", function(count){
-					$rootScope.sync = {state: "connecting", attempts: count};
+				socket.on("reconnecting", function(count) {
+					$rootScope.sync = {
+						state: "connecting",
+						attempts: count
+					};
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
-				socket.on("reconnect_error", function(err){
-					$rootScope.sync = {state: "disconnected", error: err};
+				socket.on("reconnect_error", function(err) {
+					$rootScope.sync = {
+						state: "disconnected",
+						error: err
+					};
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
-				socket.on("reconnect_failed", function(count){
-					$rootScope.sync = {state: "disconnected"};
+				socket.on("reconnect_failed", function(count) {
+					$rootScope.sync = {
+						state: "disconnected"
+					};
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
@@ -226,6 +285,5 @@
 				return $q.when(true);
 			};
 
-		}])
-	;
+		}]);
 })(angular, io);
