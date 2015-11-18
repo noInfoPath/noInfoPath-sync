@@ -50,8 +50,8 @@
 							table;
 
 						if (change) {
-							if (change.version > ver) {
-								noLogService.info("Importing: ", change);
+							if (change.version >= ver) {
+								noLogService.info("Importing: " + change);
 								table = db[change.tableName];
 								table.noUpsert(change.values)
 									.then(recurse)
@@ -122,13 +122,19 @@
 						var datum = data[d++];
 
 						socket.emit(noSync_sendLocalChanges, datum, function(resp) {
-							noLogService.log(resp);
+							//noLogService.log(resp);
 							noTransactionCache.markTransactionSynced(datum)
 								.then(function(result) {
 									if (d < data.length) {
 										recurse();
 									} else {
-										resolve();
+										noTransactionCache.dropAllSynced()
+											.then(resolve)
+											.catch(reject)
+											.finally(function(){
+												$rootScope.sync.inProgress = false;
+											});
+
 									}
 								})
 								.catch(function(err) {
@@ -141,23 +147,19 @@
 					noTransactionCache.getAllPending()
 						.then(function(resp) {
 							data = resp;
-							console.log("Local changes: " + !!resp ? resp.length : 0);
+							noLogService.log("Local changes: " + (!!resp ? resp.length : 0));
 
 							$rootScope.sync.inProgress = data.length;
 
 							if ($rootScope.sync.inProgress) {
 								recurse();
-							} else {
-								noTransactionCache.dropAllSynced();
+							}else{
 								resolve();
 							}
 
 						})
 						.catch(function(err) {
 							noLogService.error(err);
-						})
-						.finally(function(){
-							$rootScope.sync.inProgress = false;
 						});
 
 				});
@@ -174,6 +176,9 @@
 
 			function runChecks() {
 				digestLocalChanges()
+					.then(function(){
+						noLogService.log("Changes digested");
+					})
 					.catch(function(err) {
 						noLogService.error(err);
 
