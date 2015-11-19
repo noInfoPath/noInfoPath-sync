@@ -26,7 +26,7 @@
 				return tovs[tovi++] * oneSecond;
 			}
 
-			function stopMonitoring() {
+			function stopMonitoringLocalChanges() {
 				if (cancelTimer) {
 					//$timeout.cancel(cancelTimer);
 					cancelTimer();
@@ -175,6 +175,7 @@
 			}
 
 			function runChecks() {
+				stopMonitoringLocalChanges();
 				digestLocalChanges()
 					.then(function(){
 						noLogService.log("Changes digested");
@@ -192,7 +193,7 @@
 							runChecks();
 						},
 						"disconnected": function() {
-							stopMonitoring();
+							stopMonitoringLocalChanges();
 						},
 						"connecting": function() {
 
