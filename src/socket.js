@@ -8,6 +8,7 @@
 				noSync_getRemoteChanges = "remoteChanges",
 				noSync_sendLocalChanges = "localChanges",
 				noSync_newChangesAvailable = "newChangesAvailable",
+				noSync_dataReceived = "noSync::dataReceived",
 				cancelTimer, tovi = 0,
 				oneSecond = 1000,
 				db, socket;
@@ -40,6 +41,10 @@
 						ver = lastSyncVersion(),
 						changes = _.sortBy(syncData.changes, "version");
 
+					function notify(data){
+						$rootScope.$broadcast(noSync_dataReceived, data);
+					}
+
 					function recurse() {
 						if (!changes) {
 							reject("No changes received due to server side error.");
@@ -53,7 +58,8 @@
 							if (change.version >= ver) {
 								noLogService.info("Importing: " + change);
 								table = db[change.tableName];
-								table.noUpsert(change.values)
+								table.noImport(change)
+									.then(notify.bind(null, change))
 									.then(recurse)
 									.catch(function(err) {
 										noLogService.error(err);
@@ -86,7 +92,7 @@
 
 						var req = {
 							user: noLoginService.user.userId,
-							lastSyncVersion: lv - 1
+							lastSyncVersion: lv //- 1
 						};
 
 						socket.emit(noSync_getRemoteChanges, req, function(syncData) {

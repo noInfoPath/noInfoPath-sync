@@ -1,12 +1,12 @@
 //globals.js
 /*
-*	# noinfopath-sync
-*	@version 1.0.4
-*
-*	## Overview
-*	Provides data synchronization services.
-*/
-(function(angular){
+ *	# noinfopath-sync
+ *	@version 1.0.4
+ *
+ *	## Overview
+ *	Provides data synchronization services.
+ */
+(function(angular) {
 	angular.module("noinfopath.sync", []);
 })(angular);
 
@@ -20,6 +20,7 @@
 				noSync_getRemoteChanges = "remoteChanges",
 				noSync_sendLocalChanges = "localChanges",
 				noSync_newChangesAvailable = "newChangesAvailable",
+				noSync_dataReceived = "noSync::dataReceived",
 				cancelTimer, tovi = 0,
 				oneSecond = 1000,
 				db, socket;
@@ -52,6 +53,10 @@
 						ver = lastSyncVersion(),
 						changes = _.sortBy(syncData.changes, "version");
 
+					function notify(data) {
+						$rootScope.$broadcast(noSync_dataReceived, data);
+					}
+
 					function recurse() {
 						if (!changes) {
 							reject("No changes received due to server side error.");
@@ -65,7 +70,8 @@
 							if (change.version >= ver) {
 								noLogService.info("Importing: " + change);
 								table = db[change.tableName];
-								table.noUpsert(change.values)
+								table.noImport(change)
+									.then(notify.bind(null, change))
 									.then(recurse)
 									.catch(function(err) {
 										noLogService.error(err);
@@ -98,7 +104,7 @@
 
 						var req = {
 							user: noLoginService.user.userId,
-							lastSyncVersion: lv - 1
+							lastSyncVersion: lv //- 1
 						};
 
 						socket.emit(noSync_getRemoteChanges, req, function(syncData) {
@@ -143,7 +149,7 @@
 										noTransactionCache.dropAllSynced()
 											.then(resolve)
 											.catch(reject)
-											.finally(function(){
+											.finally(function() {
 												$rootScope.sync.inProgress = false;
 											});
 
@@ -165,7 +171,7 @@
 
 							if ($rootScope.sync.inProgress) {
 								recurse();
-							}else{
+							} else {
 								resolve();
 							}
 
@@ -189,7 +195,7 @@
 			function runChecks() {
 				stopMonitoringLocalChanges();
 				digestLocalChanges()
-					.then(function(){
+					.then(function() {
 						noLogService.log("Changes digested");
 					})
 					.catch(function(err) {
@@ -307,14 +313,14 @@
 })(angular, io);
 
 //directives.js
-(function(angular){
+(function(angular) {
 	angular.module("noinfopath.sync")
-		.directive("noSyncStatus", [function(){
-			function _link(scope, el, attrs){
-				scope.$watch("sync.inProgress", function(n, o, s){
-					if(n){
+		.directive("noSyncStatus", [function() {
+			function _link(scope, el, attrs) {
+				scope.$watch("sync.inProgress", function(n, o, s) {
+					if (n) {
 						el.find("div").addClass("syncing");
-					}else{
+					} else {
 						el.find("div").removeClass("syncing");
 					}
 				});
@@ -326,6 +332,5 @@
 				restrict: "E",
 				template: "<div class=\"no-status icon icon-connection {{sync.state}}\"></div>"
 			};
-		}])
-	;
+		}]);
 })(angular);
