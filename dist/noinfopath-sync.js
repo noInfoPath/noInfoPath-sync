@@ -54,7 +54,9 @@
 						changes = _.sortBy(syncData.changes, "version");
 
 					function notify(data){
-						$rootScope.$broadcast(noSync_dataReceived, data);
+						if(!data.isSame){
+							$rootScope.$broadcast(noSync_dataReceived, data);
+						}
 					}
 
 					function recurse() {
