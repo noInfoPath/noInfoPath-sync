@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 1.0.6
+*	@version 1.0.7
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -21,6 +21,7 @@
 				noSync_sendLocalChanges = "localChanges",
 				noSync_newChangesAvailable = "newChangesAvailable",
 				noSync_dataReceived = "noSync::dataReceived",
+				noSync_haveRemoteChanges = "haveChanges",
 				cancelTimer, tovi = 0,
 				oneSecond = 1000,
 				db, socket;
@@ -109,25 +110,7 @@
 							lastSyncVersion: lv //- 1
 						};
 
-						socket.emit(noSync_getRemoteChanges, req, function(syncData) {
-							noLogService.log("Data received: \n# of changes: " + syncData.changes.length);
-							importChanges(syncData)
-								.then(function() {
-									noLogService.log("Lastest changes have been imported.");
-								})
-								.catch(function(err) {
-									noLogService.error(err);
-
-								})
-								.finally(function() {
-									$rootScope.sync.inProgress = false;
-									noLocalStorage.setItem(noSync_lastSyncVersion, {
-										version: version.version
-									});
-								});
-						});
-
-
+						socket.emit(noSync_getRemoteChanges, req);
 					}
 				}
 
@@ -226,6 +209,24 @@
 
 			}
 
+			function haveRemoteChanges(syncData) {
+				noLogService.log("Data received: \n# of changes: " + syncData.changes.length);
+				importChanges(syncData)
+					.then(function() {
+						noLogService.log("Lastest changes have been imported.");
+					})
+					.catch(function(err) {
+						noLogService.error(err);
+
+					})
+					.finally(function() {
+						$rootScope.sync.inProgress = false;
+						noLocalStorage.setItem(noSync_lastSyncVersion, {
+							version: version.version
+						});
+					});
+			}
+
 			this.configure = function() {
 				var config = noConfig.current.noSync,
 					dsConfig = config.noDataSource,
@@ -245,6 +246,7 @@
 				});
 
 				socket.on(noSync_newChangesAvailable, monitorRemoteChanges);
+				socket.on(noSync_haveRemoteChanges, haveRemoteChanges);
 
 				socket.on("connect_error", function(err) {
 					$rootScope.sync = {
