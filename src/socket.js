@@ -9,7 +9,6 @@
 				noSync_sendLocalChanges = "localChanges",
 				noSync_newChangesAvailable = "newChangesAvailable",
 				noSync_dataReceived = "noSync::dataReceived",
-				noSync_haveRemoteChanges = "haveChanges",
 				cancelTimer, tovi = 0,
 				oneSecond = 1000,
 				db, socket;
@@ -19,6 +18,7 @@
 
 				return v ? v.version : 0;
 			}
+			this.lastSyncVersion = lastSyncVersion;
 
 			function timeOutValue(reset) {
 				var tovs = [5, 25, 10, 25];
@@ -30,6 +30,7 @@
 
 			function stopMonitoringLocalChanges() {
 				if (cancelTimer) {
+					noLogService.log("stopping local change monitor.");
 					//$timeout.cancel(cancelTimer);
 					cancelTimer();
 				}
@@ -50,7 +51,7 @@
 
 					function recurse() {
 						if (!changes) {
-							reject("No changes received due to server side error.");
+								reject("No changes received due to server side error.");
 							return;
 						}
 
@@ -59,7 +60,7 @@
 
 						if (change) {
 							if (change.version >= ver) {
-								noLogService.info("Importing: " + change);
+								noLogService.info("Importing: " + JSON.stringify(change));
 								table = db[change.tableName];
 								table.noImport(change)
 									.then(notify.bind(null, change))
@@ -83,22 +84,60 @@
 				});
 			}
 
+			function isGoodNamespace(ns) {
+				var t = $rootScope.noDbSchema_names.find(function (element) {
+					return("noDbSchema_" + ns) === element;
+				});
+
+				return !!t;
+			}
+
+			function askForChanges(version) {
+
+				var deferred = $q.defer(),
+					lv = lastSyncVersion();
+
+				$rootScope.sync.inProgress = true;
+				noLogService.info("New data changes are available...");
+
+				var req = {
+					user: noLoginService.user.userId,
+					lastSyncVersion: lv, //- 1,
+					namespace: version.namespace
+				};
+
+				socket.emit(noSync_getRemoteChanges, req, function (syncData) {
+					//console.log("syncData", syncData);
+					noLogService.log("Data received: \n# of changes: " + syncData.changes.length);
+					importChanges(syncData)
+						.then(deferred.resolve)
+						.then(deferred.reject);
+				});
+
+				return deferred.promise;
+			}
+			this.askForChanges = askForChanges;
+
+
 			function monitorRemoteChanges(version) {
-				var lv = lastSyncVersion();
-
-				if (!$rootScope.sync.inProgress) {
-
-					noLogService.info("Version Check: Local version: " + lv + ", Remote version: " + version.version);
-					if (lv < version.version) {
-						$rootScope.sync.inProgress = true;
-						noLogService.info("New data changes are available...");
-
-						var req = {
-							user: noLoginService.user.userId,
-							lastSyncVersion: lv //- 1
-						};
-
-						socket.emit(noSync_getRemoteChanges, req);
+				if(!$rootScope.sync.inProgress) {
+					if(isGoodNamespace(version.namespace)) {
+						noLogService.info("Version Check for " + version.namespace + ": Local version: " + lv + ", Remote version: " + version.version);
+						if(lv < version.version) {
+							askForChanges(version)
+								.then(function () {
+									noLogService.log("Lastest changes have been imported.");
+								})
+								.catch(function (err) {
+									console.error(err);
+								})
+								.finally(function () {
+									$rootScope.sync.inProgress = false;
+									noLocalStorage.setItem(noSync_lastSyncVersion, {
+										version: version.version
+									});
+								});
+						}
 					}
 				}
 
@@ -116,6 +155,7 @@
 							//noLogService.log(resp);
 							noTransactionCache.markTransactionSynced(datum)
 								.then(function(result) {
+									noLogService.log("syncing " + datum.ChangeID);
 									if (d < data.length) {
 										recurse();
 									} else {
@@ -197,24 +237,6 @@
 
 			}
 
-			function haveRemoteChanges(syncData) {
-				noLogService.log("Data received: \n# of changes: " + syncData.changes.length);
-				importChanges(syncData)
-					.then(function() {
-						noLogService.log("Lastest changes have been imported.");
-					})
-					.catch(function(err) {
-						noLogService.error(err);
-
-					})
-					.finally(function() {
-						$rootScope.sync.inProgress = false;
-						noLocalStorage.setItem(noSync_lastSyncVersion, {
-							version: version.version
-						});
-					});
-			}
-
 			this.configure = function() {
 				var config = noConfig.current.noSync,
 					dsConfig = config.noDataSource,
@@ -233,8 +255,7 @@
 					$rootScope.$apply();
 				});
 
-				socket.on(noSync_newChangesAvailable, monitorRemoteChanges);
-				socket.on(noSync_haveRemoteChanges, haveRemoteChanges);
+				socket.on(noSync_lastSyncVersion, monitorRemoteChanges);
 
 				socket.on("connect_error", function(err) {
 					$rootScope.sync = {
