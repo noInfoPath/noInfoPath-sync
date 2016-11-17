@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.1
+*	@version 2.0.2
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -158,31 +158,47 @@
 			function digestLocalChanges() {
 				return $q(function(resolve, reject) {
 					var d = 0,
-						data = [];
+						data = [],
+						syncError = false;
 
 					function recurse() {
 						var datum = data[d++];
 
 						socket.emit(noSync_sendLocalChanges, datum, function(resp) {
 							//noLogService.log(resp);
-							noTransactionCache.markTransactionSynced(datum)
+							if(resp.statusCode != -1){
+								noTransactionCache.markTransactionSynced(datum)
 								.then(function(result) {
-									noLogService.log("syncing " + datum.ChangeID);
 									if (d < data.length) {
 										recurse();
 									} else {
 										noTransactionCache.dropAllSynced()
-											.then(resolve)
-											.catch(reject)
-											.finally(function(){
-												$rootScope.sync.inProgress = false;
-											});
+										.then(resolve)
+										.catch(reject)
+										.finally(function(){
+											$rootScope.sync.inProgress = false;
+										});
 
 									}
 								})
 								.catch(function(err) {
 									noLogService.error(err);
 								});
+							} else {
+								if(!syncError){
+									noLogService.error("DTC unable to sync changes at this time. Will attempt again in 5 minutes.");
+									syncError = true;
+									$timeout(function(){
+										noTransactionCache.dropAllSynced()
+											.then(resolve)
+											.catch(reject)
+											.finally(function(){
+												syncError = false;
+												$rootScope.sync.inProgress = false;
+											});
+									}, 300000);
+								}
+							}
 						});
 
 					}
