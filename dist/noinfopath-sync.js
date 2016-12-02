@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.2
+*	@version 2.0.3
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -371,7 +371,7 @@
 			return {
 				link: _link,
 				restrict: "E",
-				template: "<div class=\"no-status icon icon-connection {{sync.state}}\"></div>"
+				template: "<div class=\"no-status {{sync.state}}\"><i class=\"fa fa-wifi\"></i></div>"
 			};
 		}])
 	;
