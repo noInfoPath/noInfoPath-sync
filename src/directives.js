@@ -19,5 +19,17 @@
 				template: "<div class=\"no-status {{sync.state}}\"><i class=\"fa fa-wifi\"></i></div>"
 			};
 		}])
+
+		.directive("noLastSync", [function(){
+			function _link(scope, el, attrs){
+
+			}
+
+			return {
+				link: _link,
+				restrict: "E",
+				template: "<div class='no-status no-last-sync'>Last synced on {{sync.lastSync}}</div>"
+			};
+		}])
 	;
 })(angular);

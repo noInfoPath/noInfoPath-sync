@@ -135,6 +135,7 @@
 				if(!$rootScope.sync.inProgress) {
 					if(isGoodNamespace(version.namespace)) {
 						noLogService.info("Version Check for " + version.namespace + ": Local version: " + lv + ", Remote version: " + version.version);
+						$rootScope.sync.lastSync = moment().format("MMMM Do YYYY, h:mm:ss a");
 						if(lv < version.version) {
 							askForChanges(version)
 								.then(function () {
@@ -274,11 +275,11 @@
 
 				socket = io(config.url);
 
+				$rootScope.sync = {};
+
 				//Map socket.io events to Angular events
 				socket.on("connect", function() {
-					$rootScope.sync = {
-						state: "connected"
-					};
+					$rootScope.sync.state = "connected";
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
@@ -286,61 +287,47 @@
 				socket.on(noSync_lastSyncVersion, monitorRemoteChanges);
 
 				socket.on("connect_error", function(err) {
-					$rootScope.sync = {
-						state: "disconnected",
-						error: err
-					};
+					$rootScope.sync.state = "disconnected";
+					$rootScope.sync.error = err;
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
 				socket.on("connect_timeout", function(err) {
-					$rootScope.sync = {
-						state: "disconnected"
-					};
+					$rootScope.sync.state = "disconnected";
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
 				socket.on("reconnect", function(count) {
-					$rootScope.sync = {
-						state: "connecting",
-						attempts: count
-					};
+					$rootScope.sync.state = "connecting";
+					$rootScope.sync.attempts = count;
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
 				socket.on("reconnect_attempt", function() {
-					$rootScope.sync = {
-						state: "connecting"
-					};
+					$rootScope.sync.state = "connecting";
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
 				socket.on("reconnecting", function(count) {
-					$rootScope.sync = {
-						state: "connecting",
-						attempts: count
-					};
+					$rootScope.sync.state = "connecting";
+					$rootScope.sync.attempts = count;
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
 				socket.on("reconnect_error", function(err) {
-					$rootScope.sync = {
-						state: "disconnected",
-						error: err
-					};
+					$rootScope.sync.state = "disconnected";
+					$rootSCope.sync.error = err;
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
 
 				socket.on("reconnect_failed", function(count) {
-					$rootScope.sync = {
-						state: "disconnected"
-					};
+					$rootScope.sync.state = "disconnected";
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
@@ -372,6 +359,18 @@
 				link: _link,
 				restrict: "E",
 				template: "<div class=\"no-status {{sync.state}}\"><i class=\"fa fa-wifi\"></i></div>"
+			};
+		}])
+
+		.directive("noLastSync", [function(){
+			function _link(scope, el, attrs){
+
+			}
+
+			return {
+				link: _link,
+				restrict: "E",
+				template: "<div class='no-status no-last-sync'>Last synced on {{sync.lastSync}}</div>"
 			};
 		}])
 	;
