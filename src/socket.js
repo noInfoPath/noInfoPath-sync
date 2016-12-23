@@ -5,6 +5,7 @@
 	angular.module("noinfopath.sync")
 		.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLogService", "noLoginService", "noTransactionCache", "lodash", function($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLogService, noLoginService, noTransactionCache, _) {
 			var noSync_lastSyncVersion = "noSync_lastSyncVersion",
+				noSync_lastSyncTS = "noSync_lastSyncTS",
 				noSync_getRemoteChanges = "remoteChanges",
 				noSync_sendLocalChanges = "localChanges",
 				noSync_newChangesAvailable = "newChangesAvailable",
@@ -123,7 +124,9 @@
 				if(!$rootScope.sync.inProgress) {
 					if(isGoodNamespace(version.namespace)) {
 						noLogService.info("Version Check for " + version.namespace + ": Local version: " + lv + ", Remote version: " + version.version);
-						$rootScope.sync.lastSync = moment().format("MMMM Do YYYY, h:mm:ss a");
+						var ts = moment().format("MMMM Do YYYY, h:mm:ss a");
+						noLocalStorage.setItem(noSync_lastSyncTS, ts);
+						$rootScope.sync.lastSync = ts
 						if(lv < version.version) {
 							askForChanges(version)
 								.then(function () {
@@ -257,13 +260,15 @@
 			this.configure = function() {
 				var config = noConfig.current.noSync,
 					dsConfig = config.noDataSource,
-					provider = $injector.get(dsConfig.dataProvider);
+					provider = $injector.get(dsConfig.dataProvider),
+					lastTimestamp = noLocalStorage.getItem(noSync_lastSyncTS);
 
 				db = provider.getDatabase(dsConfig.databaseName);
 
 				socket = io(config.url);
 
 				$rootScope.sync = {};
+				$rootScope.sync.lastSync = lastTimestamp ? lastTimestamp : "Never";
 
 				//Map socket.io events to Angular events
 				socket.on("connect", function() {
@@ -309,7 +314,7 @@
 
 				socket.on("reconnect_error", function(err) {
 					$rootScope.sync.state = "disconnected";
-					$rootSCope.sync.error = err;
+					$rootScope.sync.error = err;
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 				});
