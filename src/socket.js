@@ -124,9 +124,9 @@
 				if(!$rootScope.sync.inProgress) {
 					if(isGoodNamespace(version.namespace)) {
 						noLogService.info("Version Check for " + version.namespace + ": Local version: " + lv + ", Remote version: " + version.version);
-						var ts = moment().format("MMMM Do YYYY, h:mm:ss a");
+						var ts = moment();
 						noLocalStorage.setItem(noSync_lastSyncTS, ts);
-						$rootScope.sync.lastSync = ts
+						$rootScope.sync.lastSync = ts.fromNow();
 						if(lv < version.version) {
 							askForChanges(version)
 								.then(function () {
@@ -268,7 +268,7 @@
 				socket = io(config.url);
 
 				$rootScope.sync = {};
-				$rootScope.sync.lastSync = lastTimestamp ? lastTimestamp : "Never";
+				$rootScope.sync.lastSync = lastTimestamp ? lastTimestamp.fromNow() : "never";
 
 				//Map socket.io events to Angular events
 				socket.on("connect", function() {

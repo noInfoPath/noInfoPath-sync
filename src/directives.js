@@ -28,7 +28,7 @@
 			return {
 				link: _link,
 				restrict: "E",
-				template: "<div class='no-last-sync'>Last synced on: {{sync.lastSync}}</div>"
+				template: "<div class='no-last-sync'>Last synced {{sync.lastSync}}</div>"
 			};
 		}])
 	;
