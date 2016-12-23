@@ -1,0 +1,124 @@
+0 info it worked if it ends with ok
+1 verbose cli [ '/usr/local/bin/node', '/usr/local/bin/npm', 'publish' ]
+2 info using npm@3.10.8
+3 info using node@v6.9.1
+4 verbose publish [ '.' ]
+5 silly cache add args [ '.', null ]
+6 verbose cache add spec .
+7 silly cache add parsed spec Result {
+7 silly cache add   raw: '.',
+7 silly cache add   scope: null,
+7 silly cache add   escapedName: null,
+7 silly cache add   name: null,
+7 silly cache add   rawSpec: '.',
+7 silly cache add   spec: '/Users/gochinj/ws/noinfopath/noinfopath-sync',
+7 silly cache add   type: 'directory' }
+8 verbose addLocalDirectory /Users/gochinj/.npm/@noinfopath/noinfopath-sync/2.0.4/package.tgz not in flight; packing
+9 verbose correctMkdir /Users/gochinj/.npm correctMkdir not in flight; initializing
+10 info lifecycle @noinfopath/noinfopath-sync@2.0.4~prepublish: @noinfopath/noinfopath-sync@2.0.4
+11 silly lifecycle @noinfopath/noinfopath-sync@2.0.4~prepublish: no script for prepublish, continuing
+12 verbose tar pack [ '/Users/gochinj/.npm/@noinfopath/noinfopath-sync/2.0.4/package.tgz',
+12 verbose tar pack   '/Users/gochinj/ws/noinfopath/noinfopath-sync' ]
+13 verbose tarball /Users/gochinj/.npm/@noinfopath/noinfopath-sync/2.0.4/package.tgz
+14 verbose folder /Users/gochinj/ws/noinfopath/noinfopath-sync
+15 verbose addLocalTarball adding from inside cache /Users/gochinj/.npm/@noinfopath/noinfopath-sync/2.0.4/package.tgz
+16 verbose correctMkdir /Users/gochinj/.npm correctMkdir not in flight; initializing
+17 silly cache afterAdd @noinfopath/noinfopath-sync@2.0.4
+18 verbose afterAdd /Users/gochinj/.npm/@noinfopath/noinfopath-sync/2.0.4/package/package.json not in flight; writing
+19 verbose correctMkdir /Users/gochinj/.npm correctMkdir not in flight; initializing
+20 verbose afterAdd /Users/gochinj/.npm/@noinfopath/noinfopath-sync/2.0.4/package/package.json written
+21 silly publish { name: '@noinfopath/noinfopath-sync',
+21 silly publish   version: '2.0.4',
+21 silly publish   description: 'noInfoPath sync module',
+21 silly publish   main: 'noinfopath-sync.js',
+21 silly publish   directories: { test: 'test' },
+21 silly publish   scripts: { test: 'echo "Error: no test specified" && exit 1' },
+21 silly publish   repository: { type: 'git', url: 'http://git.img.local/noinfopath-sync.git' },
+21 silly publish   author:
+21 silly publish    { name: 'noInfoPath',
+21 silly publish      email: 'info@noInfoPath.org',
+21 silly publish      url: 'http://www.noinfopath.org/' },
+21 silly publish   license: 'MIT',
+21 silly publish   devDependencies:
+21 silly publish    { 'angular-mocks': '^1.3.8',
+21 silly publish      'jasmine-core': '^2.1.3',
+21 silly publish      karma: '^0.12.28',
+21 silly publish      'karma-chrome-launcher': '^0.1.7',
+21 silly publish      'karma-html-reporter': '^0.2.4',
+21 silly publish      'karma-jasmine': '^0.3.3',
+21 silly publish      grunt: '^0.4.5',
+21 silly publish      'grunt-bumpup': '^0.6.2',
+21 silly publish      'grunt-contrib-concat': '^0.5.1',
+21 silly publish      'grunt-contrib-copy': '^0.8.0',
+21 silly publish      'grunt-contrib-uglify': '^0.9.1',
+21 silly publish      'grunt-contrib-watch': '^0.6.1',
+21 silly publish      'grunt-karma': '^0.10.1',
+21 silly publish      'grunt-nodocs': '0.0.10',
+21 silly publish      'grunt-version': '^1.0.0' },
+21 silly publish   dependencies: { angular: '^1.3.8', 'noinfopath-logger': '0.0.1' },
+21 silly publish   readme: 'ERROR: No README data found!',
+21 silly publish   readmeFilename: 'README.md',
+21 silly publish   gitHead: 'e7473662fc2bc7f2bee20a4670518849b8a57f05',
+21 silly publish   _id: '@noinfopath/noinfopath-sync@2.0.4',
+21 silly publish   _shasum: '6269ad102b86f71a42b95222a10ccc5dd054950c',
+21 silly publish   _from: '.' }
+22 verbose getPublishConfig undefined
+23 silly mapToRegistry name @noinfopath/noinfopath-sync
+24 silly mapToRegistry scope (from package name) @noinfopath
+25 verbose mapToRegistry no registry URL found in name for scope @noinfopath
+26 silly mapToRegistry using default registry
+27 silly mapToRegistry registry https://registry.npmjs.org/
+28 silly mapToRegistry data Result {
+28 silly mapToRegistry   raw: '@noinfopath/noinfopath-sync',
+28 silly mapToRegistry   scope: '@noinfopath',
+28 silly mapToRegistry   escapedName: '@noinfopath%2fnoinfopath-sync',
+28 silly mapToRegistry   name: '@noinfopath/noinfopath-sync',
+28 silly mapToRegistry   rawSpec: '',
+28 silly mapToRegistry   spec: 'latest',
+28 silly mapToRegistry   type: 'tag' }
+29 silly mapToRegistry uri https://registry.npmjs.org/@noinfopath%2fnoinfopath-sync
+30 verbose publish registryBase https://registry.npmjs.org/
+31 silly publish uploading /Users/gochinj/.npm/@noinfopath/noinfopath-sync/2.0.4/package.tgz
+32 verbose request uri https://registry.npmjs.org/@noinfopath%2fnoinfopath-sync
+33 verbose request sending authorization for write operation
+34 info attempt registry request try #1 at 3:55:22 PM
+35 verbose request using bearer token for auth
+36 verbose request id 799057275671b9b7
+37 http request PUT https://registry.npmjs.org/@noinfopath%2fnoinfopath-sync
+38 http 403 https://registry.npmjs.org/@noinfopath%2fnoinfopath-sync
+39 verbose headers { 'content-type': 'application/json',
+39 verbose headers   'cache-control': 'max-age=0',
+39 verbose headers   'content-length': '95',
+39 verbose headers   'accept-ranges': 'bytes',
+39 verbose headers   date: 'Fri, 23 Dec 2016 20:55:24 GMT',
+39 verbose headers   via: '1.1 varnish',
+39 verbose headers   connection: 'keep-alive',
+39 verbose headers   'x-served-by': 'cache-iad2120-IAD',
+39 verbose headers   'x-cache': 'MISS',
+39 verbose headers   'x-cache-hits': '0',
+39 verbose headers   'x-timer': 'S1482526522.929801,VS0,VE1108' }
+40 verbose request invalidating /Users/gochinj/.npm/registry.npmjs.org/_40noinfopath_252fnoinfopath-sync on PUT
+41 error publish Failed PUT 403
+42 verbose stack Error: "You cannot publish over the previously published version 2.0.4." : @noinfopath/noinfopath-sync
+42 verbose stack     at makeError (/usr/local/lib/node_modules/npm/node_modules/npm-registry-client/lib/request.js:302:12)
+42 verbose stack     at CachingRegistryClient.<anonymous> (/usr/local/lib/node_modules/npm/node_modules/npm-registry-client/lib/request.js:290:14)
+42 verbose stack     at Request._callback (/usr/local/lib/node_modules/npm/node_modules/npm-registry-client/lib/request.js:210:14)
+42 verbose stack     at Request.self.callback (/usr/local/lib/node_modules/npm/node_modules/request/request.js:187:22)
+42 verbose stack     at emitTwo (events.js:106:13)
+42 verbose stack     at Request.emit (events.js:191:7)
+42 verbose stack     at Request.<anonymous> (/usr/local/lib/node_modules/npm/node_modules/request/request.js:1044:10)
+42 verbose stack     at emitOne (events.js:96:13)
+42 verbose stack     at Request.emit (events.js:188:7)
+42 verbose stack     at IncomingMessage.<anonymous> (/usr/local/lib/node_modules/npm/node_modules/request/request.js:965:12)
+43 verbose statusCode 403
+44 verbose pkgid @noinfopath/noinfopath-sync
+45 verbose cwd /Users/gochinj/ws/noinfopath/noinfopath-sync
+46 error Darwin 16.1.0
+47 error argv "/usr/local/bin/node" "/usr/local/bin/npm" "publish"
+48 error node v6.9.1
+49 error npm  v3.10.8
+50 error code E403
+51 error "You cannot publish over the previously published version 2.0.4." : @noinfopath/noinfopath-sync
+52 error If you need help, you may report this error at:
+52 error     <https://github.com/npm/npm/issues>
+53 verbose exit [ 1, true ]
