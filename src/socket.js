@@ -140,7 +140,7 @@
 							})
 							.finally(function() {
 								var ts = moment();
-								$rootScope.sync.inProgress = false;								
+								$rootScope.sync.inProgress = false;
 								noLocalStorage.setItem(noSync_lastSyncVersion, {
 									version: version.version,
 									lastSync: ts
