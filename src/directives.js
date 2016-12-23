@@ -16,7 +16,7 @@
 			return {
 				link: _link,
 				restrict: "E",
-				template: "<div class=\"no-status icon icon-connection {{sync.state}}\"></div>"
+				template: "<div class=\"no-status {{sync.state}}\"><i class=\"fa fa-wifi\"></i></div>"
 			};
 		}])
 	;
