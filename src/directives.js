@@ -25,12 +25,12 @@
 				var noSync_lastSyncVersion = "noSync_lastSyncVersion",
 					lastTimestamp = noLocalStorage.getItem(noSync_lastSyncVersion);
 
-				$rootScope.sync.lastSync = lastTimestamp ? lastTimestamp.fromNow() : "never";
+				$rootScope.sync.lastSync = lastTimestamp.lastSync ? lastTimestamp.lastSync.fromNow() : "never";
 
 				$interval(function(){
-					lastTimestamp = noLocalStorage.getItem(noSync_lastSyncVersion);				
+					lastTimestamp = noLocalStorage.getItem(noSync_lastSyncVersion);
 
-					$rootScope.sync.lastSync = lastTimestamp ? lastTimestamp.fromNow() : "never";
+					$rootScope.sync.lastSync = lastTimestamp.lastSync ? lastTimestamp.lastSync.fromNow() : "never";
 				}, 1000);
 			}
 
