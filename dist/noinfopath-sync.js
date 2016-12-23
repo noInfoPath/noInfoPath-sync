@@ -374,6 +374,10 @@
 				var noSync_lastSyncVersion = "noSync_lastSyncVersion",
 					lastTimestamp = noLocalStorage.getItem(noSync_lastSyncVersion);
 
+				if(!angular.isObject($rootScope.sync)){
+					$rootScope.sync = {};
+				}
+
 				$rootScope.sync.lastSync = lastTimestamp.lastSync ? lastTimestamp.lastSync.fromNow() : "never";
 
 				$interval(function(){
