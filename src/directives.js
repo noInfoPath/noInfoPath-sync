@@ -20,9 +20,18 @@
 			};
 		}])
 
-		.directive("noLastSync", [function(){
+		.directive("noLastSync", ["$interval", "$rootScope", "noLocalStorage", function($interval, $rootScope, noLocalStorage){
 			function _link(scope, el, attrs){
+				var noSync_lastSyncVersion = "noSync_lastSyncVersion",
+					lastTimestamp = noLocalStorage.getItem(noSync_lastSyncVersion);
 
+				$rootScope.sync.lastSync = lastTimestamp ? lastTimestamp.fromNow() : "never";
+
+				$interval(function(){
+					lastTimestamp = noLocalStorage.getItem(noSync_lastSyncVersion);				
+
+					$rootScope.sync.lastSync = lastTimestamp ? lastTimestamp.fromNow() : "never";
+				}, 1000);
 			}
 
 			return {
