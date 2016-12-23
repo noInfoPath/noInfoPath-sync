@@ -80,28 +80,34 @@
 
 					if (change) {
 						if (change.version >= ver) {
-							noLogService.info("Importing: " + JSON.stringify(change));
+							console.info("Importing: " + JSON.stringify(change));
 							table = db[change.tableName];
 							table.noImport(change)
 							.then(notify.bind(null, change))
 							.then(recurse)
 							.catch(function(err) {
-								noLogService.error(err);
+								console.error(err);
 								recurse();
 							});
 						} else {
 							recurse();
 						}
 					} else {
-						noLocalStorage.setItem(noSync_lastSyncVersion, {
-							version: syncData.version
-						});
+						updateSyncStatus(syncData.version);
+
 						resolve();
 					}
 				}
 
 				recurse();
 			});
+		}
+
+		function updateSyncStatus(version) {
+			if(version) $rootScope.sync.version = version;
+			$rootScope.sync.inProgress = false;
+			$rootScope.sync.lastSync = moment();
+			noLocalStorage.setItem(noSync_lastSyncVersion, $rootScope.sync);
 		}
 
 		function isGoodNamespace(ns) {
@@ -190,7 +196,7 @@
 											.then(resolve)
 											.catch(reject)
 											.finally(function() {
-												$rootScope.sync.inProgress = false;
+												updateSyncStatus();
 											});
 
 									}
@@ -230,6 +236,7 @@
 			digestLocalChanges()
 				.then(function() {
 					console.log("Changes digested");
+
 				})
 				.catch(function(err) {
 					console.error(err.message, err.error);
@@ -370,21 +377,23 @@
 		}])
 
 		.directive("noLastSync", ["$interval", "$rootScope", "noLocalStorage", function($interval, $rootScope, noLocalStorage){
-			function _link(scope, el, attrs){
+			function updateSyncStatus() {
 				var noSync_lastSyncVersion = "noSync_lastSyncVersion",
-					lastTimestamp = noLocalStorage.getItem(noSync_lastSyncVersion);
+					sync = noLocalStorage.getItem(noSync_lastSyncVersion);
+
 
 				if(!angular.isObject($rootScope.sync)){
 					$rootScope.sync = {};
 				}
 
-				$rootScope.sync.lastSync = (lastTimestamp && lastTimestamp.lastSync) ? lastTimestamp.lastSync.fromNow() : "never";
+				sync.lastSync = sync.lastSync.fromNow ? sync.lastSync : moment(sync.lastSync);
 
-				$interval(function(){
-					lastTimestamp = noLocalStorage.getItem(noSync_lastSyncVersion);
+				$rootScope.sync.lastSync = (sync && sync.lastSync) ? sync.lastSync.fromNow() : "never";
 
-					$rootScope.sync.lastSync = (lastTimestamp && lastTimestamp.lastSync) ? lastTimestamp.lastSync.fromNow() : "never";
-				}, 1000);
+			}
+			function _link(scope, el, attrs){
+				updateSyncStatus()
+				$interval(updateSyncStatus, 1000);
 			}
 
 			return {

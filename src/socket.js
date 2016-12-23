@@ -68,28 +68,34 @@
 
 					if (change) {
 						if (change.version >= ver) {
-							noLogService.info("Importing: " + JSON.stringify(change));
+							console.info("Importing: " + JSON.stringify(change));
 							table = db[change.tableName];
 							table.noImport(change)
 							.then(notify.bind(null, change))
 							.then(recurse)
 							.catch(function(err) {
-								noLogService.error(err);
+								console.error(err);
 								recurse();
 							});
 						} else {
 							recurse();
 						}
 					} else {
-						noLocalStorage.setItem(noSync_lastSyncVersion, {
-							version: syncData.version
-						});
+						updateSyncStatus(syncData.version);
+
 						resolve();
 					}
 				}
 
 				recurse();
 			});
+		}
+
+		function updateSyncStatus(version) {
+			if(version) $rootScope.sync.version = version;
+			$rootScope.sync.inProgress = false;
+			$rootScope.sync.lastSync = moment();
+			noLocalStorage.setItem(noSync_lastSyncVersion, $rootScope.sync);
 		}
 
 		function isGoodNamespace(ns) {
@@ -178,7 +184,7 @@
 											.then(resolve)
 											.catch(reject)
 											.finally(function() {
-												$rootScope.sync.inProgress = false;
+												updateSyncStatus();
 											});
 
 									}
@@ -218,6 +224,7 @@
 			digestLocalChanges()
 				.then(function() {
 					console.log("Changes digested");
+
 				})
 				.catch(function(err) {
 					console.error(err.message, err.error);

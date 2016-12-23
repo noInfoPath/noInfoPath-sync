@@ -21,21 +21,23 @@
 		}])
 
 		.directive("noLastSync", ["$interval", "$rootScope", "noLocalStorage", function($interval, $rootScope, noLocalStorage){
-			function _link(scope, el, attrs){
+			function updateSyncStatus() {
 				var noSync_lastSyncVersion = "noSync_lastSyncVersion",
-					lastTimestamp = noLocalStorage.getItem(noSync_lastSyncVersion);
+					sync = noLocalStorage.getItem(noSync_lastSyncVersion);
+
 
 				if(!angular.isObject($rootScope.sync)){
 					$rootScope.sync = {};
 				}
 
-				$rootScope.sync.lastSync = (lastTimestamp && lastTimestamp.lastSync) ? lastTimestamp.lastSync.fromNow() : "never";
+				sync.lastSync = sync.lastSync.fromNow ? sync.lastSync : moment(sync.lastSync);
 
-				$interval(function(){
-					lastTimestamp = noLocalStorage.getItem(noSync_lastSyncVersion);
+				$rootScope.sync.lastSync = (sync && sync.lastSync) ? sync.lastSync.fromNow() : "never";
 
-					$rootScope.sync.lastSync = (lastTimestamp && lastTimestamp.lastSync) ? lastTimestamp.lastSync.fromNow() : "never";
-				}, 1000);
+			}
+			function _link(scope, el, attrs){
+				updateSyncStatus()
+				$interval(updateSyncStatus, 1000);
 			}
 
 			return {
