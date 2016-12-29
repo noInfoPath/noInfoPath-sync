@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.5
+*	@version 2.0.6
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -381,18 +381,20 @@
 				var noSync_lastSyncVersion = "noSync_lastSyncVersion",
 					sync = noLocalStorage.getItem(noSync_lastSyncVersion);
 
-
 				if(!angular.isObject($rootScope.sync)){
 					$rootScope.sync = {};
 				}
 
-				sync.lastSync = sync.lastSync.fromNow ? sync.lastSync : moment(sync.lastSync);
-
-				$rootScope.sync.lastSync = (sync && sync.lastSync) ? sync.lastSync.fromNow() : "never";
-
+				if(sync && sync.lastSync){
+					sync.lastSync = sync.lastSync.fromNow ? sync.lastSync : moment(sync.lastSync);
+					$rootScope.sync.lastSync = sync.lastSync.fromNow();
+				} else {
+					$rootScope.sync.lastSync = "never";
+				}
 			}
+
 			function _link(scope, el, attrs){
-				updateSyncStatus()
+				updateSyncStatus();
 				$interval(updateSyncStatus, 1000);
 			}
 
