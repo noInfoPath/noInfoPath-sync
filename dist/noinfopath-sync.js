@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.6
+*	@version 2.0.7
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -18,18 +18,18 @@
 
 	.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLogService", "noLoginService", "noTransactionCache", "lodash", function($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLogService, noLoginService, noTransactionCache, _) {
 		var noSync_lastSyncVersion = "noSync_lastSyncVersion",
-		noSync_getRemoteChanges = "remoteChanges",
-		noSync_sendLocalChanges = "localChanges",
-		noSync_newChangesAvailable = "newChangesAvailable",
-		noSync_dataReceived = "noSync::dataReceived",
-		cancelTimer, tovi = 0,
-		oneSecond = 1000,
-		db, socket;
+			noSync_getRemoteChanges = "remoteChanges",
+			noSync_sendLocalChanges = "localChanges",
+			noSync_newChangesAvailable = "newChangesAvailable",
+			noSync_dataReceived = "noSync::dataReceived",
+			cancelTimer, tovi = 0,
+			oneSecond = 1000,
+			db, socket;
 
 		function lastSyncVersion() {
 			var v = noLocalStorage.getItem(noSync_lastSyncVersion);
 
-			return v ? v.version : 0;
+			return v && v.version ? v.version : 0;
 		}
 		this.lastSyncVersion = lastSyncVersion;
 
@@ -83,11 +83,11 @@
 							console.info("Importing: " + JSON.stringify(change));
 							table = db[change.tableName];
 							table.noImport(change)
-							.then(notify.bind(null, change))
-							.then(recurse)
-							.catch(function(err) {
-								console.error(err);
-								recurse();
+								.then(notify.bind(null, change))
+								.then(recurse)
+								.catch(function(err) {
+									console.error(err);
+									recurse();
 							});
 						} else {
 							recurse();
@@ -127,17 +127,17 @@
 			noLogService.info("New data changes are available...");
 
 			var req = {
-				user: noLoginService.user.userId,
+				jwt: noLoginService.user.access_token,
 				lastSyncVersion: lv, //- 1,
 				namespace: version.namespace
 			};
 
 			socket.emit(noSync_getRemoteChanges, req, function(syncData) {
-				//console.log("syncData", syncData);
+				console.log("syncData", syncData);
 				noLogService.log("Data received: \n# of changes: " + syncData.changes.length);
 				importChanges(syncData)
-				.then(deferred.resolve)
-				.then(deferred.reject);
+					.then(deferred.resolve)
+					.then(deferred.reject);
 			});
 
 			return deferred.promise;
@@ -145,8 +145,10 @@
 		this.askForChanges = askForChanges;
 
 		function monitorRemoteChanges(version) {
+			console.log("monitorRemoteChanges", version);
 			if (!$rootScope.sync.inProgress) {
 				if (isGoodNamespace(version.namespace)) {
+					var lv = lastSyncVersion();
 					noLogService.info("Version Check for " + version.namespace + ": Local version: " + lv + ", Remote version: " + version.version);
 					if (lv < version.version) {
 						askForChanges(version)
