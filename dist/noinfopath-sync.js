@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.9
+*	@version 2.0.10
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -93,7 +93,7 @@
 								.then(notify.bind(null, change))
 								.then(recurse)
 								.catch(function(err) {
-									console.error(err);
+									console.error("Import Error", err, change.tableName);
 									recurse();
 							});
 						} else {

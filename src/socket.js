@@ -81,7 +81,7 @@
 								.then(notify.bind(null, change))
 								.then(recurse)
 								.catch(function(err) {
-									console.error(err);
+									console.error("Import Error", err, change.tableName);
 									recurse();
 							});
 						} else {
