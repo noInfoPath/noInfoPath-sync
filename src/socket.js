@@ -68,8 +68,12 @@
 
 					if (change) {
 						if (change.version >= ver) {
-							console.info("Importing: " + JSON.stringify(change));
 							table = db[change.tableName];
+
+							if(!table) recurse();
+
+							console.info("Importing: " + JSON.stringify(change));
+
 							table.noImport(change)
 								.then(notify.bind(null, change))
 								.then(recurse)
