@@ -82,7 +82,10 @@
 						if (change.version >= ver) {
 							table = db[change.tableName];
 
-							if(!table) recurse();
+							if(!table) {
+								recurse();
+								return;
+							}
 
 							console.info("Importing: " + JSON.stringify(change));
 
