@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.11
+*	@version 2.0.12
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -16,7 +16,7 @@
 
 	angular.module("noinfopath.sync")
 
-	.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLogService", "noLoginService", "noTransactionCache", "lodash", function($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLogService, noLoginService, noTransactionCache, _) {
+	.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLogService", "noLoginService", "noTransactionCache", "lodash", "noLocalFileStorage", "noHTTP", function($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLogService, noLoginService, noTransactionCache, _, noLocalFileStorage, noHTTP) {
 		var noSync_lastSyncVersion = "noSync_lastSyncVersion",
 			noSync_getRemoteChanges = "remoteChanges",
 			noSync_sendLocalChanges = "localChanges",
@@ -60,12 +60,40 @@
 			return $q(function(resolve, reject) {
 
 				var ci = 0,
-				ver = lastSyncVersion(),
-				changes = _.sortBy(syncData.changes, "version");
+					ver = lastSyncVersion(),
+					changes = _.sortBy(syncData.changes, "version");
 
 				function notify(data) {
 					if (!data.isSame) {
 						$rootScope.$broadcast(noSync_dataReceived, data);
+					}
+				}
+
+				function handleFileImport(table, change) {
+					if(table.noInfoPath.NoInfoPath_FileUploadCache) {
+						var localFiles = $rootScope.noIndexedDb_NoInfoPath_dtc_v1.NoInfoPath_FileUploadCache;
+
+						return localFiles.hasPrimaryKeys([change.values.FileID])
+							.then(function(keys){
+								if(keys.length > 0) {
+									//file exists. just return true.
+									return true;
+								} else {
+									var remoteFiles = noHTTP.NoInfoPath_FileUploadCache;
+
+										//file does not exist, so request it.
+									return  remoteFiles.noOne(change.values.FileID)
+										.then(function(fileObj){
+											console.log(fileObj);
+											noLocalFileStorage.cache(fileObj);  //There should be only one!
+										})
+										.catch(function(err){
+											console.error(err);
+										});
+								}
+							})
+					} else {
+						return change;
 					}
 				}
 
@@ -90,6 +118,7 @@
 							console.info("Importing: " + JSON.stringify(change));
 
 							table.noImport(change)
+								.then(handleFileImport.bind(null, table, change))
 								.then(notify.bind(null, change))
 								.then(recurse)
 								.catch(function(err) {
@@ -152,7 +181,6 @@
 		this.askForChanges = askForChanges;
 
 		function monitorRemoteChanges(version) {
-			console.log("monitorRemoteChanges", version);
 			if (!$rootScope.sync.inProgress) {
 				if (isGoodNamespace(version.namespace)) {
 					var lv = lastSyncVersion();
@@ -294,9 +322,13 @@
 					token: noLoginService.user.access_token
 				})
 				.on('authenticated', function() {
+					console.log("DTCS Authentication successful.");
 					$rootScope.sync.state = "connected";
 					$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
+
+					//askForVersionUpdate();
+					//monitorRemoteChanges(noLocalStorage.getItem(noSync_lastSyncVersion) || {});
 				})
 				.on('unauthorized', function(msg) {
 					console.log("unauthorized: " + JSON.stringify(msg.data));
