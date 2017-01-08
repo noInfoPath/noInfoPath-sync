@@ -72,7 +72,7 @@
 										//file does not exist, so request it.
 									return  remoteFiles.noOne(change.values.FileID)
 										.then(function(fileObj){
-											console.log(fileObj);
+											console.log("Importing file", fileObj.name);
 											noLocalFileStorage.cache(fileObj);  //There should be only one!
 										})
 										.catch(function(err){
@@ -103,7 +103,7 @@
 								return;
 							}
 
-							console.info("Importing: " + JSON.stringify(change));
+							console.info("Syncing table", change.tableName);
 
 							table.noImport(change)
 								.then(handleFileImport.bind(null, table, change))
@@ -157,7 +157,7 @@
 			};
 
 			socket.emit(noSync_getRemoteChanges, req, function(syncData) {
-				console.log("syncData", syncData);
+				//console.log("syncData", syncData);
 				noLogService.log("Data received: \n# of changes: " + syncData.changes.length);
 				importChanges(syncData)
 					.then(deferred.resolve)
