@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.13
+*	@version 2.0.14
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -70,28 +70,34 @@
 				}
 
 				function handleFileImport(table, change) {
+					
 					if(table.noInfoPath.NoInfoPath_FileUploadCache) {
 						var localFiles = $rootScope.noIndexedDb_NoInfoPath_dtc_v1.NoInfoPath_FileUploadCache;
 
-						return localFiles.hasPrimaryKeys([change.values.FileID])
-							.then(function(keys){
-								if(keys.length > 0) {
-									//file exists. just return true.
-									return true;
-								} else {
-									var remoteFiles = noHTTP.NoInfoPath_FileUploadCache;
+						if(change.values.FileID) {
 
-										//file does not exist, so request it.
-									return  remoteFiles.noOne(change.values.FileID)
-										.then(function(fileObj){
-											console.log("Importing file", fileObj.name);
-											noLocalFileStorage.cache(fileObj);  //There should be only one!
-										})
-										.catch(function(err){
-											console.error(err);
-										});
-								}
-							})
+							return localFiles.hasPrimaryKeys([change.values.FileID])
+								.then(function(keys){
+									if(keys.length > 0) {
+										//file exists. just return true.
+										return true;
+									} else {
+										var remoteFiles = noHTTP.NoInfoPath_FileUploadCache;
+
+											//file does not exist, so request it.
+										return  remoteFiles.noOne(change.values.FileID)
+											.then(function(fileObj){
+												console.log("Importing file", fileObj.name);
+												noLocalFileStorage.cache(fileObj);  //There should be only one!
+											})
+											.catch(function(err){
+												console.error(err);
+											});
+									}
+								})
+						} else {
+							return $q.when(change);
+						}
 					} else {
 						return change;
 					}
