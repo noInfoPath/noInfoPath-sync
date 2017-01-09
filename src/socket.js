@@ -58,7 +58,7 @@
 				}
 
 				function handleFileImport(table, change) {
-					
+
 					if(table.noInfoPath.NoInfoPath_FileUploadCache) {
 						var localFiles = $rootScope.noIndexedDb_NoInfoPath_dtc_v1.NoInfoPath_FileUploadCache;
 
@@ -79,7 +79,7 @@
 												noLocalFileStorage.cache(fileObj);  //There should be only one!
 											})
 											.catch(function(err){
-												console.error(err);
+												console.error("handleFileImport", err);
 											});
 									}
 								})
