@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.15
+*	@version 2.0.17
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -16,7 +16,7 @@
 
 	angular.module("noinfopath.sync")
 
-	.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLogService", "noLoginService", "noTransactionCache", "lodash", "noLocalFileStorage", "noHTTP", function($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLogService, noLoginService, noTransactionCache, _, noLocalFileStorage, noHTTP) {
+	.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLoginService", "noTransactionCache", "lodash", "noLocalFileStorage", "noHTTP", function($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLoginService, noTransactionCache, _, noLocalFileStorage, noHTTP) {
 		var noSync_lastSyncVersion = "noSync_lastSyncVersion",
 			noSync_getRemoteChanges = "remoteChanges",
 			noSync_sendLocalChanges = "localChanges",
@@ -50,7 +50,7 @@
 
 		function stopMonitoringLocalChanges() {
 			if (cancelTimer) {
-				noLogService.log("stopping local change monitor.");
+				console.log("Stopping local change monitor.");
 				//$timeout.cancel(cancelTimer);
 				cancelTimer();
 			}
@@ -61,10 +61,14 @@
 
 				var ci = 0,
 					ver = lastSyncVersion(),
-					changes = _.sortBy(syncData.changes, "version");
+					changes = _.sortBy(syncData.changes, "version"),
+					stats = {total: syncData.changes.length, skipped: 0, synced: 0};
 
 				function notify(data) {
-					if (!data.isSame) {
+					if (data.isSame) {
+						stats.skipped += 1;
+					} else {
+						stats.synced += 1;
 						$rootScope.$broadcast(noSync_dataReceived, data);
 					}
 				}
@@ -132,9 +136,12 @@
 									recurse();
 							});
 						} else {
+							stats.skipped += 1;
 							recurse();
 						}
 					} else {
+						console.log("Sync complete.\nTotal Changes Process:", stats.total, "\nChanges Skipped:", stats.skipped, "\nChanges Imported:", stats.synced);
+
 						updateSyncStatus(syncData.version);
 
 						resolve();
@@ -146,11 +153,13 @@
 		}
 
 		function updateSyncStatus(version) {
+			if(!$rootScope.sync) $rootScope.sync = {};
 			if(version) $rootScope.sync.version = version;
 			$rootScope.sync.inProgress = false;
 			$rootScope.sync.lastSync = moment();
 			noLocalStorage.setItem(noSync_lastSyncVersion, $rootScope.sync);
 		}
+		this.updateSyncStatus = updateSyncStatus;
 
 		function isGoodNamespace(ns) {
 			var t = $rootScope.noDbSchema_names.find(function(element) {
@@ -166,7 +175,7 @@
 			lv = lastSyncVersion();
 
 			$rootScope.sync.inProgress = true;
-			noLogService.info("New data changes are available...");
+			console.info("New data changes are available...");
 
 			var req = {
 				jwt: noLoginService.user.access_token,
@@ -176,10 +185,11 @@
 
 			socket.emit(noSync_getRemoteChanges, req, function(syncData) {
 				//console.log("syncData", syncData);
-				noLogService.log("Data received: \n# of changes: " + syncData.changes.length);
+				console.log("Data received: \n# of changes: " + syncData.changes.length);
+
 				importChanges(syncData)
 					.then(deferred.resolve)
-					.then(deferred.reject);
+					.catch(deferred.reject);
 			});
 
 			return deferred.promise;
@@ -190,8 +200,10 @@
 			if (!$rootScope.sync.inProgress) {
 				if (isGoodNamespace(version.namespace)) {
 					var lv = lastSyncVersion();
-					noLogService.info("Version Check for " + version.namespace + ": Local version: " + lv + ", Remote version: " + version.version);
+
 					if (lv < version.version) {
+						console.info("Version update available for " + version.namespace + ": Local version: " + lv + ", Remote version: " + version.version);
+
 						askForChanges(version)
 							.then(function() {
 								console.log("Lastest changes have been imported.");
