@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.17
+*	@version 2.0.18
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -460,7 +460,7 @@
 			return {
 				link: _link,
 				restrict: "E",
-				template: "<div class='no-last-sync'>Last synced {{sync.lastSync}}</div>"
+				template: "<div class='no-last-sync'>Last synced {{sync.lastSync}} @ Version {{sync.version || 0}}</div>"
 			};
 		}])
 	;
