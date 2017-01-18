@@ -4,3 +4,7 @@
 ## Overview
 Provides data synchronization services.
 
+## @class NoSyncData
+
+TODO: Add description.
+

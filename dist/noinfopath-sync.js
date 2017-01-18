@@ -7,6 +7,103 @@
 *	Provides data synchronization services.
 */
 (function(angular){
+	/*
+	*	## @class NoSyncData
+	*
+	*	TODO: Add description.
+	*/
+	function NoSyncData(data) {
+		//Defaults
+		this.attempts = 0;
+		this.error  = "";
+		this.inProgress = false;
+		this.state = "connecting";
+
+
+		Object.defineProperty(this, "lastSync", {
+			get: function(){
+				var t = moment(this.lastSyncTimestamp).fromNow();
+				return t === "Invalid date" ? "never" : t;
+			}
+		});
+
+		Object.defineProperty(this, "needChanges", {
+			get: function(){
+
+				return this.previousVersion > 0 && this.version < this.previousVersion;
+			}
+		});
+
+		var _internalDate;
+		Object.defineProperty(this, "lastSyncTimestamp", {
+			get: function(){
+				return _internalDate;
+			},
+			set: function(v) {
+				if(angular.isString(v)) {
+					_internalDate = new Date(v);
+				} else if(angular.isDate(v)) {
+					_internalDate = v;
+				}
+			}
+		});
+
+		var _prevVersion = 0;
+		Object.defineProperty(this, "previousVersion", {
+			get: function(){
+
+				return _prevVersion;
+			}
+		});
+
+		var _version = 0;
+		Object.defineProperty(this, "version", {
+			get: function(){
+				return _version;
+			},
+			set: function(v) {
+				__prevVersion = _version;
+				_version = v;
+			}
+		});
+
+		//Merge with data
+		if(data) {
+			this.lastSyncTimestamp = data.lastSyncTimestamp || this.lastSyncTimestamp;
+			this.version = data.version || this.version;
+		}
+
+		this.toJSON = function() {
+			var ds = Object.getOwnPropertyDescriptors(this),
+				o = {},
+				blacklist = ["attempts", "error", "inProgress", "state", "lastSync"];
+			for(var k in ds) {
+				var d = ds[k],
+					t = this[k],
+					f = angular.isFunction(t);
+
+
+				if(!f && blacklist.indexOf(k) === -1) {
+					o[k] = t;
+				}
+			}
+			return JSON.stringify(o);
+		};
+
+		this.update = function(key, value) {
+			this[key] = value;
+		}
+	}
+
+	NoSyncData.fromJSON = function(data) {
+		var tmp = angular.isString(data) ? JSON.parse(data) : data;
+			obj = new NoSyncData(tmp);
+
+		return obj;
+	};
+
+	noInfoPath.NoSyncData = NoSyncData;
+
 	angular.module("noinfopath.sync", []);
 })(angular);
 
@@ -27,9 +124,14 @@
 			db, socket;
 
 		function lastSyncVersion() {
-			var v = noLocalStorage.getItem(noSync_lastSyncVersion);
+			var s = noInfoPath.NoSyncData.fromJSON($rootScope.sync ? $rootScope.sync : noLocalStorage.getItem(noSync_lastSyncVersion));
 
-			return v && v.version ? v.version : 0;
+			if(!$rootScope.sync) {
+				$rootScope.sync = s;
+				//noLocalStorage.getItem("sync", JSON.parse(s.toJSON()))
+			}
+
+			return $rootScope.sync.version;
 		}
 		this.lastSyncVersion = lastSyncVersion;
 
@@ -49,7 +151,7 @@
 		}
 
 		function stopMonitoringLocalChanges() {
-			if (cancelTimer) {
+			if ($rootScope.sync.state === "connected" && cancelTimer) {
 				console.log("Stopping local change monitor.");
 				//$timeout.cancel(cancelTimer);
 				cancelTimer();
@@ -153,11 +255,10 @@
 		}
 
 		function updateSyncStatus(version) {
-			if(!$rootScope.sync) $rootScope.sync = {};
-			if(version) $rootScope.sync.version = version;
-			$rootScope.sync.inProgress = false;
-			$rootScope.sync.lastSync = moment();
-			noLocalStorage.setItem(noSync_lastSyncVersion, $rootScope.sync);
+			if(version) $rootScope.sync.update("version", version)
+ 			$rootScope.sync.update("inProgress", false)
+			$rootScope.sync.update("lastSyncTimestamp", new Date());
+			noLocalStorage.setItem(noSync_lastSyncVersion, $rootScope.sync.toJSON());
 		}
 		this.updateSyncStatus = updateSyncStatus;
 
@@ -201,7 +302,7 @@
 				if (isGoodNamespace(version.namespace)) {
 					var lv = lastSyncVersion();
 
-					if (lv < version.version) {
+					if ($rootScope.sync.version < version.version) {
 						console.info("Version update available for " + version.namespace + ": Local version: " + lv + ", Remote version: " + version.version);
 
 						askForChanges(version)
@@ -209,15 +310,14 @@
 								console.log("Lastest changes have been imported.");
 							})
 							.catch(function(err) {
+								$rootScope.sync.update("error", err);
 								console.error(err);
 							})
 							.finally(function() {
 								var ts = moment();
-								$rootScope.sync.inProgress = false;
-								noLocalStorage.setItem(noSync_lastSyncVersion, {
-									version: version.version,
-									lastSync: ts
-								});
+								$rootScope.sync.update("inProgress", false);
+								$rootScope.sync.update("lastSyncTimestamp", ts);
+								$rootScope.$broadcast("sync::change", $rootScope.sync);
 							});
 					}
 				}
@@ -321,10 +421,9 @@
 			var config = noConfig.current.noSync,
 				dsConfig = config.noDataSource,
 				provider = $injector.get(dsConfig.dataProvider);
+				//syncObj = noInfoPath.NoSyncData.fromJSON(noLocalStorage.getItem(noSync_lastSyncVersion));
 
-			if(!angular.isObject($rootScope.sync)){
-				$rootScope.sync = {};
-			}
+			//$rootScope.sync = syncObj;
 
 			db = provider.getDatabase(dsConfig.databaseName);
 
@@ -341,8 +440,8 @@
 				})
 				.on('authenticated', function() {
 					console.log("DTCS Authentication successful.");
-					$rootScope.sync.state = "connected";
-					$rootScope.$broadcast("sync::change", $rootScope.sync);
+					$rootScope.sync.update("state", "connected");
+					//$rootScope.$broadcast("sync::change", $rootScope.sync);
 					$rootScope.$apply();
 
 					//askForVersionUpdate();
@@ -358,50 +457,50 @@
 			socket.on(noSync_lastSyncVersion, monitorRemoteChanges);
 
 			socket.on("connect_error", function(err) {
-				$rootScope.sync.state =  "disconnected";
-				$rootScope.sync.error = err;
+				$rootScope.sync.update("state", "disconnected");
+				$rootScope.sync.update("error", err);
 
-				$rootScope.$broadcast("sync::change", $rootScope.sync);
+				//$rootScope.$broadcast("sync::change", $rootScope.sync);
 				$rootScope.$apply();
 			});
 
 			socket.on("connect_timeout", function(err) {
-				$rootScope.sync.state = "disconnected";
+				$rootScope.sync.update("state", "disconnected");
 
-				$rootScope.$broadcast("sync::change", $rootScope.sync);
+				//$rootScope.$broadcast("sync::change", $rootScope.sync);
 				$rootScope.$apply();
 			});
 
 			socket.on("reconnect", function(count) {
-				$rootScope.sync.state = "connecting";
-				$rootScope.sync.attempts = count;
-				$rootScope.$broadcast("sync::change", $rootScope.sync);
+				$rootScope.sync.update("state", "disconnected");
+				$rootScope.sync.update("attempts", count);
+				//$rootScope.$broadcast("sync::change", $rootScope.sync);
 				$rootScope.$apply();
 			});
 
 			socket.on("reconnect_attempt", function() {
-				$rootScope.sync.state = "connecting";
-				$rootScope.$broadcast("sync::change", $rootScope.sync);
+				$rootScope.sync.update("state", "connecting");
+				//$rootScope.$broadcast("sync::change", $rootScope.sync);
 				$rootScope.$apply();
 			});
 
 			socket.on("reconnecting", function(count) {
-				$rootScope.sync.state = "connecting";
-				$rootScope.sync.attempts = count;
-				$rootScope.$broadcast("sync::change", $rootScope.sync);
+				$rootScope.sync.update("state", "connecting");
+				$rootScope.sync.update("attempts", count);
+				//$rootScope.$broadcast("sync::change", $rootScope.sync);
 				$rootScope.$apply();
 			});
 
 			socket.on("reconnect_error", function(err) {
-				$rootScope.sync.state = "disconnected";
-				$rootScope.sync.error = err;
-				$rootScope.$broadcast("sync::change", $rootScope.sync);
+				$rootScope.sync.update("state", "disconnected");
+				$rootScope.sync.update("error", "err");
+				//$rootScope.$broadcast("sync::change", $rootScope.sync);
 				$rootScope.$apply();
 			});
 
 			socket.on("reconnect_failed", function(count) {
-				$rootScope.sync.state = "disconnected";
-				$rootScope.$broadcast("sync::change", $rootScope.sync);
+				$rootScope.sync.update("state", "disconnected");
+				//$rootScope.$broadcast("sync::change", $rootScope.sync);
 				$rootScope.$apply();
 			});
 
