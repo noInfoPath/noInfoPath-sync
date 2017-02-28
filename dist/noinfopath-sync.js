@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.19
+*	@version 2.0.20
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -200,7 +200,7 @@
 												console.error("handleFileImport", err);
 											});
 									}
-								})
+								});
 						} else {
 							return $q.when(change);
 						}
@@ -255,8 +255,8 @@
 		}
 
 		function updateSyncStatus(version) {
-			if(version) $rootScope.sync.update("version", version)
- 			$rootScope.sync.update("inProgress", false)
+			if(version) $rootScope.sync.update("version", version);
+ 			$rootScope.sync.update("inProgress", false);
 			$rootScope.sync.update("lastSyncTimestamp", new Date());
 			noLocalStorage.setItem(noSync_lastSyncVersion, $rootScope.sync.toJSON());
 		}

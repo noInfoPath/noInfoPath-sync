@@ -91,7 +91,7 @@
 												console.error("handleFileImport", err);
 											});
 									}
-								})
+								});
 						} else {
 							return $q.when(change);
 						}
@@ -146,8 +146,8 @@
 		}
 
 		function updateSyncStatus(version) {
-			if(version) $rootScope.sync.update("version", version)
- 			$rootScope.sync.update("inProgress", false)
+			if(version) $rootScope.sync.update("version", version);
+ 			$rootScope.sync.update("inProgress", false);
 			$rootScope.sync.update("lastSyncTimestamp", new Date());
 			noLocalStorage.setItem(noSync_lastSyncVersion, $rootScope.sync.toJSON());
 		}
