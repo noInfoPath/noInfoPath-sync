@@ -11,6 +11,13 @@
 					}
 				});
 
+				scope.$watch("sync.pending", function(n, o, s){
+					if(n){
+						el.find("div").addClass("pending");
+					}else{
+						el.find("div").removeClass("pending");
+					}
+				});
 			}
 
 			return {
@@ -30,8 +37,8 @@
 				}
 
 				if(sync && sync.lastSync){
-					sync.lastSync = sync.lastSync.fromNow ? sync.lastSync : moment(sync.lastSync);
-					$rootScope.sync.lastSync = sync.lastSync.fromNow();
+					//sync.lastSync = sync.lastSync.fromNow ? sync.lastSync : moment(sync.lastSync);
+					$rootScope.sync.lastSync = sync.lastSync;
 				} else {
 					$rootScope.sync.lastSync = "never";
 				}
@@ -45,7 +52,7 @@
 			return {
 				link: _link,
 				restrict: "E",
-				template: "<div class='no-last-sync'>Last synced {{sync.lastSync}} @ Version {{sync.version || 0}}</div>"
+				template: "<div class='no-last-sync'>Last synced {{sync.lastSync}} @ Version {{  sync.pending ? sync.previous.version : sync.current.version }}</div>"
 			};
 		}])
 	;

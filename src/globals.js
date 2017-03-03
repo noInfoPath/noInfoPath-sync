@@ -16,10 +16,25 @@
 		//Defaults
 		this.attempts = 0;
 		this.error  = "";
-		this.inProgress = false;
+		//this.inProgress = false;
 		this.state = "connecting";
 
+		var _inProgress = false;
+		Object.defineProperty(this, "inProgress", {
+			get: function(){
+				return _inProgress;
+			},
+			set: function(v) {
+				_inProgress = v;
+			}
+		});
 
+		/*
+		*	#### String lastSync (read only)
+		*
+		*	##### getter
+		*	Returns the amount of time that has past since the last sync event.
+		*/
 		Object.defineProperty(this, "lastSync", {
 			get: function(){
 				var t = moment(this.lastSyncTimestamp).fromNow();
@@ -27,14 +42,20 @@
 			}
 		});
 
+		/*
+		*	#### Boolean needChanges (read only)
+		*
+		*	##### getter
+		*	Return true if the `previousVersion` is greater than zero, and `version`
+		*	is greater than `previousVersion`.
+		*/
 		Object.defineProperty(this, "needChanges", {
 			get: function(){
-
-				return this.previousVersion > 0 && this.version < this.previousVersion;
+				return this.previous.version > 0 && this.current.version > this.previous.version;
 			}
 		});
 
-		var _internalDate;
+		var _internalDate = new Date();
 		Object.defineProperty(this, "lastSyncTimestamp", {
 			get: function(){
 				return _internalDate;
@@ -48,31 +69,91 @@
 			}
 		});
 
-		var _prevVersion = 0;
-		Object.defineProperty(this, "previousVersion", {
+		/*
+		*	#### Obect previousVersion (read only)
+		*
+		*	##### getter
+		*	Return the pervious version update information, if any.
+		*	Otherwise returns `null`
+		*/
+		var _prevVersion = {version: 0};
+		Object.defineProperty(this, "previous", {
 			get: function(){
 
 				return _prevVersion;
 			}
 		});
 
-		var _version = 0;
-		Object.defineProperty(this, "version", {
+		/*
+		*	#### Object version (read/write)
+		*
+		*	##### getter
+		*	returns the current version object used for requesting data from DTCS.
+		*
+		*	##### setter
+		*	Set the `previousVersion` to the current `version`, then sets
+		*	current 'version' to the assignment value.  Finally, sets the
+		*	`pending` property to true.
+		*
+		*/
+		var _version = {version: 0};
+		Object.defineProperty(this, "current", {
 			get: function(){
 				return _version;
 			},
 			set: function(v) {
-				__prevVersion = _version;
-				_version = v;
+
+				_prevVersion = _version;
+				_version = v || _version;
+				_pending = true;
+				_inProgress = false;
+				_internalDate = new Date();
 			}
 		});
 
+		/*
+		*	#### Boolean (read/write)
+		*
+		*	##### getter
+		*	Returns the current pending state.
+		*
+		*/
+		var _pending = false;
+		Object.defineProperty(this, "pending", {
+			get: function(){
+				return _pending;
+			}
+		});
+
+		/*
+		*	#### clearPending()
+		*
+		*	Set the pending state to false.
+		*/
+		this.clearPending = function() {
+			_pending = false;
+		};
+
+		this.syncComplete = function(){
+			_inProgress = false;
+			_internalDate = new Date();
+		};
+
+		this.start = function() {
+			this.inProgress = true;
+		};
+
 		//Merge with data
 		if(data) {
-			this.lastSyncTimestamp = data.lastSyncTimestamp || this.lastSyncTimestamp;
-			this.version = data.version || this.version;
+			//this.lastSyncTimestamp = data.lastSyncTimestamp || this.lastSyncTimestamp;
+			this.current = data.version;
 		}
 
+		/*
+		*	#### String toJSON()
+		*
+		*	Return a pure javascript object suitable for persistence in localStorage.
+		*/
 		this.toJSON = function() {
 			var ds = Object.getOwnPropertyDescriptors(this),
 				o = {},
@@ -92,9 +173,14 @@
 
 		this.update = function(key, value) {
 			this[key] = value;
-		}
+		};
 	}
 
+	/*
+	*	#### Static NoSyncData fromJSON(data)
+	*
+	*	Returns a new NoSyncData intances hydrated with the provide pure javascript object.
+	*/
 	NoSyncData.fromJSON = function(data) {
 		var tmp = angular.isString(data) ? JSON.parse(data) : data;
 			obj = new NoSyncData(tmp);
