@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.20
+*	@version 2.0.21
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -13,11 +13,17 @@
 	*	TODO: Add description.
 	*/
 	function NoSyncData(data) {
+
 		//Defaults
 		this.attempts = 0;
 		this.error  = "";
 		//this.inProgress = false;
 		this.state = "connecting";
+
+		var _initializing = true;
+		this.initialized= function() {
+			_initializing = false;
+		};
 
 		var _inProgress = false;
 		Object.defineProperty(this, "inProgress", {
@@ -51,7 +57,7 @@
 		*/
 		Object.defineProperty(this, "needChanges", {
 			get: function(){
-				return this.previous.version > 0 && this.current.version > this.previous.version;
+				return _initializing ||  (this.previous.version > 0 && this.previous.version < this.previous.version);
 			}
 		});
 
@@ -134,13 +140,15 @@
 			_pending = false;
 		};
 
-		this.syncComplete = function(){
+		this.finished = function(){
+			_pending = false;
 			_inProgress = false;
 			_internalDate = new Date();
+			_prevVersion = _version;
 		};
 
 		this.start = function() {
-			this.inProgress = true;
+			_inProgress = true;
 		};
 
 		//Merge with data
@@ -174,7 +182,10 @@
 		this.update = function(key, value) {
 			this[key] = value;
 		};
+
+
 	}
+
 
 	/*
 	*	#### Static NoSyncData fromJSON(data)
@@ -188,6 +199,11 @@
 		return obj;
 	};
 
+	NoSyncData.prototype.toString = function() {
+		var ret = "Sync Status\n-----------------------" + "\nCurrent Version: " + this.current.version + "\nPrevious Version: " + this.previous.version +  "\nState: " + this.state + "\nNeedChanges: " + this.needChanges + "\nPending: " + this.pending + "\nIn Progress: " + this.inProgress;
+
+		return ret;
+	};
 	noInfoPath.NoSyncData = NoSyncData;
 
 	angular.module("noinfopath.sync", []);
