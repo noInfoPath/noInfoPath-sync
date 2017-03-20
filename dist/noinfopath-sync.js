@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.21
+*	@version 2.0.22
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -213,7 +213,7 @@
 (function (angular, io) {
 	"use strict";
 
-	function NoSyncService($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLoginService, noTransactionCache, _, noLocalFileStorage, noHTTP, noPrompt, noNotificationService, noTemplateCache) {
+	function NoSyncService($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLoginService, noTransactionCache, _, noLocalFileStorage, noHTTP, noPrompt, noNotificationService, noTemplateCache, PubSub) {
 		var noSync_lastSyncVersion = "noSync_lastSyncVersion",
 			noSync_getRemoteChanges = "remoteChanges",
 			noSync_sendLocalChanges = "localChanges",
@@ -231,7 +231,7 @@
 		function stopMonitoringLocalChanges() {
 			if ($rootScope.sync.state === "connected") {
 				console.log("Stopping local change monitor.");
-				if(unbindMonitorLocalChanges) unbindMonitorLocalChanges();
+				if (unbindMonitorLocalChanges) unbindMonitorLocalChanges();
 			}
 		}
 
@@ -247,18 +247,21 @@
 					};
 
 				function notify(data) {
+					console.log("notify", data);
 					if (data.isSame) {
 						stats.skipped += 1;
 					} else {
 						stats.synced += 1;
-						$rootScope.$broadcast(noSync_dataReceived, data);
+						//$rootScope.$broadcast(noSync_dataReceived, data);
 					}
 				}
 
 				function handleFileImport(table, change) {
 
 					if (table.noInfoPath.NoInfoPath_FileUploadCache) {
-						var localFiles = $rootScope.noIndexedDb_NoInfoPath_dtc_v1.NoInfoPath_FileUploadCache;
+						var localFiles = $rootScope.noFileStorageCRUD_NoInfoPath_dtc_v1_files.NoInfoPath_FileUploadCache,
+							remoteDataSvc = $rootScope.noHTTP_rmEFR2_Remote2,
+							table = remoteDataSvc.NoInfoPath_FileUploadCache.entity;
 
 						if (change.values.FileID) {
 
@@ -268,14 +271,13 @@
 										//file exists. just return true.
 										return true;
 									} else {
-										var remoteFiles = noHTTP.NoInfoPath_FileUploadCache;
+										var url = table.uri + "/" + change.values.FileID,
+											method = "GET",
+											data,
+											useCreds = true;
 
-										//file does not exist, so request it.
-										return remoteFiles.noOne(change.values.FileID)
-											.then(function (fileObj) {
-												console.log("Importing file", fileObj.name);
-												noLocalFileStorage.cache(fileObj); //There should be only one!
-											})
+										return remoteDataSvc.noRequestJSON(url, method, data, useCreds)
+											.then(localFiles.noBulkCreate)
 											.catch(function (err) {
 												console.error("handleFileImport", err);
 											});
@@ -299,7 +301,8 @@
 						table;
 
 					if (change) {
-						if ((noConfig.current.debug && force) || change.version >= $rootScope.sync.current.version) {
+						//May need to compare to previous.version not current.version
+						if ((noConfig.current.debug && force) || change.version > $rootScope.sync.previous.version) {
 							table = db[change.tableName];
 
 							if (!table) {
@@ -325,7 +328,7 @@
 						console.log("Sync complete.\nTotal Changes Process:", stats.total, "\nChanges Skipped:", stats.skipped, "\nChanges Imported:", stats.synced);
 
 						updateSyncStatus(syncData);
-
+						PubSub.publish("noSync::complete", true);
 						resolve();
 					}
 				}
@@ -365,7 +368,7 @@
 			socket.emit(noSync_getRemoteChanges, req, function (syncData) {
 				//console.log("syncData", syncData);
 				if (syncData) {
-					if(syncData.changes.length > 0) {
+					if (syncData.changes.length > 0) {
 						console.info("New data changes are available...");
 						$rootScope.sync.start();
 						_importChanges(syncData)
@@ -396,7 +399,7 @@
 			// }
 		}
 
-		function _forceImport(namespace, version, cb){
+		function _forceImport(namespace, version, cb) {
 			force = true;
 			_startImport(namespace, cb, version);
 		}
@@ -408,7 +411,7 @@
 			if (_isGoodNamespace(namespace)) {
 
 				if (sync.needChanges) {
-					console.info("Version update available for\n", namespace, sync.toString());
+					console.info("Version update available for", namespace, "\n", sync.toString());
 
 					_askForChanges(version || sync.previous.version, namespace)
 						.then(function (msg) {
@@ -424,9 +427,10 @@
 							//var ts = moment();
 							sync.finished();
 							console.log("Sync Complete\n", sync.toString());
-							$rootScope.$broadcast("sync::change", sync);
-							if(cb) {
+							if (cb) {
 								cb($rootScope.sync, message);
+							} else {
+								//$rootScope.$broadcast("sync::change", sync);
 							}
 						}.bind(null, sync));
 				}
@@ -467,7 +471,7 @@
 										noTransactionCache.dropAllSynced()
 											.then(resolve)
 											.catch(reject);
-											//.finally(updateSyncStatus);
+										//.finally(updateSyncStatus);
 
 									}
 								})
@@ -535,12 +539,21 @@
 		this.configure = function () {
 			var config = noConfig.current.noSync,
 				dsConfig = config.noDataSource,
-				provider = $injector.get(dsConfig.dataProvider),
-				initialLoad = true;
+				provider = $injector.get(dsConfig.dataProvider);
 
 			$rootScope.sync = noInfoPath.NoSyncData.fromJSON(noLocalStorage.getItem(noSync_lastSyncVersion));
 
 			db = provider.getDatabase(dsConfig.databaseName);
+
+
+			$rootScope.$watch("sync.state", stateChanged);
+
+			return $q.when(true);
+		};
+
+		this.connect = function () {
+			var config = noConfig.current.noSync,
+			initialLoad = true;
 
 			socket = io(config.url, {
 				extraHeaders: {
@@ -554,13 +567,17 @@
 						token: noLoginService.user.access_token
 					})
 					.on('authenticated', function () {
-						if(!initialLoad) noNotificationService.appendMessage("Connection to Data Transaction Coordinator Service successful.", {type: "success"});
+						if (!initialLoad) noNotificationService.appendMessage("Connection to Data Transaction Coordinator Service successful.", {
+							type: "success"
+						});
 						initialLoad = false;
 						$rootScope.sync.update("state", "connected");
 						$rootScope.$apply();
 					})
 					.on('unauthorized', function (msg) {
-						noNotificationService.appendMessage("Failed to authenticate with Data Transaction Coordinator Service.", {type: "warning"});
+						noNotificationService.appendMessage("Failed to authenticate with Data Transaction Coordinator Service.", {
+							type: "warning"
+						});
 						console.log("unauthorized: " + JSON.stringify(msg.data));
 						throw new Error(msg.data.type);
 					});
@@ -570,7 +587,10 @@
 			socket.on(noSync_lastSyncVersion, monitorRemoteChanges);
 
 			socket.on("connect_error", function (err) {
-				if(!initialLoad) noNotificationService.appendMessage("Lost connection to Data Transaction Coordinator Service.", {type: "danger", ttl: "2"});
+				if (!initialLoad) noNotificationService.appendMessage("Lost connection to Data Transaction Coordinator Service.", {
+					type: "danger",
+					ttl: "2"
+				});
 				initialLoad = false;
 				$rootScope.sync.update("state", "disconnected");
 				$rootScope.sync.update("error", err);
@@ -610,15 +630,14 @@
 				$rootScope.$apply();
 			});
 
-			$rootScope.$watch("sync.state", stateChanged);
-
 			return $q.when(true);
-		};
 
+		}
 	}
 
+
 	angular.module("noinfopath.sync")
-		.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLoginService", "noTransactionCache", "lodash", "noLocalFileStorage", "noHTTP", "noPrompt", "noNotificationService", "noTemplateCache", NoSyncService]);
+		.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLoginService", "noTransactionCache", "lodash", "noLocalFileStorage", "noHTTP", "noPrompt", "noNotificationService", "noTemplateCache", "PubSub", NoSyncService]);
 })(angular, io);
 
 //directives.js
@@ -734,7 +753,7 @@
 
 			function _link(scope, el, attrs){
 				var b = el.find("button"), unWatch;
-				console.log(b);
+				
 				b.click(_alertIconClicked.bind(null, scope));
 
 				unWatch = scope.$watch("sync.pending", function(n, o, s){

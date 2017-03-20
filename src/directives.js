@@ -111,7 +111,7 @@
 
 			function _link(scope, el, attrs){
 				var b = el.find("button"), unWatch;
-				console.log(b);
+				
 				b.click(_alertIconClicked.bind(null, scope));
 
 				unWatch = scope.$watch("sync.pending", function(n, o, s){
