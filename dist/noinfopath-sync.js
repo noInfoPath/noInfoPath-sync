@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.22
+*	@version 2.0.23
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -224,15 +224,21 @@
 
 		function monitorLocalChanges() {
 			console.info("Monitoring local changes.");
-			unbindMonitorLocalChanges = $rootScope.$on(noSync_localDataUpdated, runChecks);
+			if(!unbindMonitorLocalChanges) {
+				unbindMonitorLocalChanges = $rootScope.$on(noSync_localDataUpdated, runChecks);
+
+			}
 		}
 
 		//NOTE: This might not be needed other than for debugging.
 		function stopMonitoringLocalChanges() {
-			if ($rootScope.sync.state === "connected") {
+			//if ($rootScope.sync.state === "connected") {
 				console.log("Stopping local change monitor.");
-				if (unbindMonitorLocalChanges) unbindMonitorLocalChanges();
-			}
+				if (unbindMonitorLocalChanges) {
+					unbindMonitorLocalChanges();
+					unbindMonitorLocalChanges = null;
+				}
+			//}
 		}
 
 		function _importChanges(syncData) {
@@ -256,9 +262,9 @@
 					}
 				}
 
-				function handleFileImport(table, change) {
+				function handleFileImport(parentTable, change) {
 
-					if (table.noInfoPath.NoInfoPath_FileUploadCache) {
+					if (parentTable.noInfoPath.NoInfoPath_FileUploadCache) {
 						var localFiles = $rootScope.noFileStorageCRUD_NoInfoPath_dtc_v1_files.NoInfoPath_FileUploadCache,
 							remoteDataSvc = $rootScope.noHTTP_rmEFR2_Remote2,
 							table = remoteDataSvc.NoInfoPath_FileUploadCache.entity;
@@ -356,8 +362,6 @@
 		function _askForChanges(version, namespace) {
 
 			var deferred = $q.defer();
-
-
 
 			var req = {
 				jwt: noLoginService.user.access_token,
@@ -568,6 +572,7 @@
 					})
 					.on('authenticated', function () {
 						if (!initialLoad) noNotificationService.appendMessage("Connection to Data Transaction Coordinator Service successful.", {
+							id: "connected",
 							type: "success"
 						});
 						initialLoad = false;
@@ -576,6 +581,7 @@
 					})
 					.on('unauthorized', function (msg) {
 						noNotificationService.appendMessage("Failed to authenticate with Data Transaction Coordinator Service.", {
+							id: "unauthorized",
 							type: "warning"
 						});
 						console.log("unauthorized: " + JSON.stringify(msg.data));
@@ -588,6 +594,7 @@
 
 			socket.on("connect_error", function (err) {
 				if (!initialLoad) noNotificationService.appendMessage("Lost connection to Data Transaction Coordinator Service.", {
+					id: "disconnected",
 					type: "danger",
 					ttl: "2"
 				});
@@ -632,7 +639,7 @@
 
 			return $q.when(true);
 
-		}
+		};
 	}
 
 
