@@ -2,7 +2,7 @@
 (function (angular, io) {
 	"use strict";
 
-	function NoSyncService($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLoginService, noTransactionCache, _, noLocalFileStorage, noHTTP, noPrompt, noNotificationService, noTemplateCache, PubSub) {
+	function NoSyncService($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLoginService, noTransactionCache, _, noLocalFileSystem, noHTTP, noPrompt, noNotificationService, noTemplateCache, PubSub, noMimeTypes) {
 		var noSync_lastSyncVersion = "noSync_lastSyncVersion",
 			noSync_getRemoteChanges = "remoteChanges",
 			noSync_sendLocalChanges = "localChanges",
@@ -241,9 +241,70 @@
 					data = [],
 					syncError = false;
 
-				function recurse() {
-					var datum = data[d++];
-					datum.jwt = noLoginService.user.access_token;
+				function _processFile(change, schema) {
+					//1. Get the file data using $http
+					switch(change.changeType) {
+						case "C":
+							return noLocalFileSystem.getFile(change.data, schema)
+								.then(function(fileObj, fileKeyName, file){
+									var payload = new FormData(),
+										url = noConfig.current.NOREST + "/aws/bucket",
+										options = {
+											method: "POST",
+											headers: {
+												"Content-Type": undefined
+											},
+											transformRequest: angular.identity
+										};
+
+									var x = new FileReader();
+
+
+
+									payload.append("file", file);
+									payload.append("name", fileObj.name);
+									payload.append("type", fileObj.type);
+									payload.append("size", fileObj.size);
+
+									noHTTP.noRequest(url, options, payload)
+										.then(function(){
+											console.log("File cached upstream.", schema);
+										})
+										.catch(function(err){
+											console.error(err);
+										});
+
+								}.bind(null, change.data, schema.primaryKey))
+								.catch(function(err){
+									console.error(err);
+								});
+						case "D":
+							return noLocalFileSystem.deleteFile(change.data, schema);
+					}
+
+				}
+
+				function _processFiles(datum) {
+					//Check the changes for entities that relate to files.
+					var schema = noInfoPath.getItem($rootScope, "noDbSchema_" + datum.namespace),
+						promises = [];
+
+					if(!schema) throw new Error("Invalid names provided in NoTransaction object.");
+
+					datum.changes.forEach(function(change){
+						var entity = schema.entity(change.tableName);
+
+						if(!entity) throw new Error("Invalid table name: " + change.tableName);
+
+						if(entity.NoInfoPath_FileUploadCache) {
+							promises.push(_processFile(change, entity));
+						}
+					});
+
+					return $q.all(promises);
+				}
+
+				function _sendChanges(datum){
 					socket.emit(noSync_sendLocalChanges, datum, function (resp) {
 						//noLogService.log(resp);
 						if (resp.status === -1) {
@@ -274,6 +335,17 @@
 						}
 					});
 
+				}
+
+				function recurse() {
+					var datum = data[d++];
+					datum.jwt = noLoginService.user.access_token;
+
+					_processFiles(datum)
+					 	.then(_sendChanges.bind(null, datum))
+						.catch(function(err){
+							console.error(err);
+						});
 				}
 
 				noTransactionCache.getAllPending()
@@ -433,5 +505,5 @@
 
 
 	angular.module("noinfopath.sync")
-		.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLoginService", "noTransactionCache", "lodash", "noLocalFileStorage", "noHTTP", "noPrompt", "noNotificationService", "noTemplateCache", "PubSub", NoSyncService]);
+		.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLoginService", "noTransactionCache", "lodash", "noLocalFileSystem", "noHTTP", "noPrompt", "noNotificationService", "noTemplateCache", "PubSub", "noMimeTypes", NoSyncService]);
 })(angular, io);
