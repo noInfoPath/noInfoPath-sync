@@ -59,6 +59,7 @@ module.exports = function(grunt) {
 	//grunt.registerTask('default', ['jsdoc2md']);
 	grunt.registerTask('compile', ['concat:noinfopath','nodocs:internal']);
 	grunt.registerTask('build', ['bumpup','version','concat:noinfopath','nodocs:internal']);
+	grunt.registerTask('release', ['bumpup','version','concat:noinfopath','nodocs:internal']);
 	grunt.registerTask('watch-compile', ['watch:working']);
 
 };
