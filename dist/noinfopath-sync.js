@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.24
+*	@version 2.0.25
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -213,7 +213,7 @@
 (function (angular, io) {
 		"use strict";
 
-		function NoSyncService($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLoginService, noTransactionCache, _, noLocalFileSystem, noHTTP, noPrompt, noNotificationService, noTemplateCache, PubSub, noMimeTypes) {
+		function NoSyncService($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLoginService, noTransactionCache, _, noDataSource, noHTTP, noPrompt, noNotificationService, noTemplateCache, PubSub, noMimeTypes) {
 			var noSync_lastSyncVersion = "noSync_lastSyncVersion",
 				noSync_getRemoteChanges = "remoteChanges",
 				noSync_sendLocalChanges = "localChanges",
@@ -242,6 +242,7 @@
 			}
 
 			function _importChanges(syncData) {
+
 				return $q(function (resolve, reject) {
 
 					var ci = 0,
@@ -263,31 +264,47 @@
 					}
 
 					function _importFile(parentTable, change) {
-						var fileObj = change.values,
-							url = noConfig.current.NOREST + "/aws/bucket/" + fileObj.name,
-							options = {
-								method: "GET",
-								headers: {
-									"Content-Type": undefined
-								},
-								responseType: "arraybuffer"
-							};
+						var parentSchema = parentTable.noInfoPath.parentSchema.config,
+							dsConfig = {
+								"dataProvider": parentSchema.provider,
+								"databaseName": parentSchema.dbName,
+								"entityName": parentTable.noInfoPath.entityName,
+								"primaryKey": parentTable.noInfoPath.primaryKey
+							},
+							importDS = noDataSource.create(dsConfig, $rootScope);
 
-						noHTTP.noRequest(url, options)
-							.then(function (resp) {
-								var file = new File([resp.data], fileObj.name, {
-									type: fileObj.type
-								});
+						switch(change.operation){
+							case "C":
+								var fileObj = change.values,
+									url = noConfig.current.NOREST + "/aws/bucket/" + fileObj.name,
+									options = {
+										method: "GET",
+										headers: {
+											"Content-Type": undefined
+										},
+										responseType: "arraybuffer"
+									};
 
-								file.DocumentID = fileObj.ID;
+								return noHTTP.noRequest(url, options)
+									.then(function (resp) {
+										var file = new File([resp.data], fileObj.name, {
+											type: fileObj.type
+										});
 
-								return noLocalFileSystem.save(file);
-								//console.log("File cached upstream.", schema);
-							})
-							.catch(function (err) {
-								console.error(err);
-							});
+										file.DocumentID = fileObj.ID;
 
+										return importDS.createDocument(fileObj, file);
+										//console.log("File cached upstream.", schema);
+									})
+									.catch(function (err) {
+										console.error(err);
+									});
+
+							case "U":
+								return importDS.update(change.values);
+							case "D":
+								return importDS.destroy(change.changedPKID);
+						}
 					}
 
 					function _recurse() {
@@ -470,8 +487,10 @@
 				syncError = false;
 
 			function _addFile(change, schema) {
-				return noLocalFileSystem.getFile(change.data, schema)
-					.then(function (fileObj, fileKeyName, file) {
+				var noFileCache = noFileSystem.getDatabase(schema).NoFileCache;
+
+				return noFileCache.noOne(change.data)
+					.then(function (fileObj, file) {
 						var payload = new FormData(),
 							url = noConfig.current.NOREST + "/aws/bucket",
 							options = {
@@ -481,8 +500,6 @@
 								},
 								transformRequest: angular.identity
 							};
-
-						var x = new FileReader();
 
 						payload.append("file", file);
 						payload.append("name", fileObj.name);
@@ -497,15 +514,35 @@
 								console.error(err);
 							});
 
+					}.bind(null, change.data))
+					.catch(function (err) {
+						console.error(err);
+					});
+			}
+
+			function _deleteFile(change, schema) {
+				var noFileCache = noFileSystem.getDatabase(schema).NoFileCache;
+
+				return noFileCache.noOne(change.data)
+					.then(function (fileObj, fileKeyName, file) {
+						var payload = new FormData(),
+							url = noConfig.current.NOREST + "/aws/bucket/" + fileObj.name,
+							options = {
+								method: "DELETE"
+							};
+
+						noHTTP.noRequest(url, options)
+							.then(function () {
+								console.log("File deleted upstream.", schema);
+							})
+							.catch(function (err) {
+								console.error(err);
+							});
+
 					}.bind(null, change.data, schema.primaryKey))
 					.catch(function (err) {
 						console.error(err);
 					});
-
-			}
-
-			function _deleteFile(change, schema) {
-				return noLocalFileSystem.deleteFile(change.data, schema);
 			}
 
 			function _processOutboundFile(change, schema) {
@@ -532,25 +569,21 @@
 
 				if (!schema) throw new Error("Invalid namespace provided in NoTransaction object.");
 
-				datum.changes.forEach(function (change) {
-					//Skip "NoInfoPath_FileUploadCache" transactions.
-					console.warn("TODO: Need find were NoInfoPath_FileUploadCache is recording transactions, remove that functionality.");
-					if (change.tableName !== "NoInfoPath_FileUploadCache") {
-						var entity = schema.entity(change.tableName);
+				if(!!datum.cachedFiles.length) {
+					datum.cachedFiles.forEach(function(fileChange){
+						console.log("fileChange", fileChange);
+						promises.push(_processOutboundFile(fileChange, fileChange.schema)
+							.catch(_syncException.bind(null, "An error occur processing inbound client-side changes", datum)));
+					});
 
-						if (!entity) throw new Error("Invalid table name: " + change.tableName);
+					return $q.all(promises).then(function (results) {
+						console.log(results);
+						return datum;
+					});
+				} else {
+					return $q.when(datum);
+				}
 
-						if (entity.NoInfoPath_FileUploadCache) {
-							promises.push(_processOutboundFile(change, entity)
-								.catch(_syncException.bind(null, "An error occur processing inbound client-side changes", datum)));
-						}
-					}
-				});
-
-				return !!promises.length ? $q.all(promises).then(function () {
-					console.log(datum);
-					return datum;
-				}) : $q.when(datum);
 			}
 
 			function _sendChanges(datum) {
@@ -558,15 +591,20 @@
 					socket.emit(noSync_sendLocalChanges, datum, function (resp) {
 						//noLogService.log(resp);
 						if (resp.status === -1) {
-							console.warn("TODO: Revisit noSync_sendLocalChanges response of -1");
-							$rootScope.sync.inProgress = false;
+							_syncException(resp.message, datum, resp.originalError)
+								.then(resolve)
+								.catch(reject);
+
+							//console.warn("TODO: Revisit noSync_sendLocalChanges response of -1");
+
+							// $rootScope.sync.inProgress = false;
 							// $rootScope.sync.error = resp.message;
 							// $rootScope.sync.state = "connecting";
 							//$timeout(runChecks, 5 * 60 * 1000);
-							reject({
-								message: "digestLocalChanges error, will retry every 5 minutes until successful.",
-								error: resp
-							});
+							// reject({
+							// 	message: "digestLocalChanges error, will retry every 5 minutes until successful.",
+							// 	error: resp
+							// });
 						} else {
 							noTransactionCache.markTransactionSynced(datum)
 								.then(resolve)
@@ -593,7 +631,12 @@
 
 				} else {
 					$rootScope.sync.inProgress = false;
-					resolve();
+					noTransactionCache.dropAllSynced()
+						.then(resolve)
+						.catch(reject)
+						.finally(function(){
+							$rootScope.sync.inProgress = false;
+						});
 				}
 
 			}
@@ -755,7 +798,7 @@
 
 
 angular.module("noinfopath.sync")
-	.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLoginService", "noTransactionCache", "lodash", "noLocalFileSystem", "noHTTP", "noPrompt", "noNotificationService", "noTemplateCache", "PubSub", "noMimeTypes", NoSyncService]);
+	.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLoginService", "noTransactionCache", "lodash", "noDataSource", "noHTTP", "noPrompt", "noNotificationService", "noTemplateCache", "PubSub", "noMimeTypes", NoSyncService]);
 })(angular, io);
 
 //directives.js
