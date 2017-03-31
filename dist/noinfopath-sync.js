@@ -487,9 +487,17 @@
 				syncError = false;
 
 			function _addFile(change, schema) {
-				var noFileCache = noFileSystem.getDatabase(schema).NoFileCache;
+				var parentTable = db[change.schema.entityName],
+					parentSchema = parentTable.noInfoPath.parentSchema.config,
+					dsConfig = {
+						"dataProvider": parentSchema.provider,
+						"databaseName": parentSchema.dbName,
+						"entityName": parentTable.noInfoPath.entityName,
+						"primaryKey": parentTable.noInfoPath.primaryKey
+					},
+					exportDS = noDataSource.create(dsConfig, $rootScope);
 
-				return noFileCache.noOne(change.data)
+				return exportDS.one(change.data[schema.primaryKey])
 					.then(function (fileObj, file) {
 						var payload = new FormData(),
 							url = noConfig.current.NOREST + "/aws/bucket",
@@ -521,9 +529,17 @@
 			}
 
 			function _deleteFile(change, schema) {
-				var noFileCache = noFileSystem.getDatabase(schema).NoFileCache;
+				var parentTable = db[change.schema.entityName],
+					parentSchema = parentTable.noInfoPath.parentSchema.config,
+					dsConfig = {
+						"dataProvider": parentSchema.provider,
+						"databaseName": parentSchema.dbName,
+						"entityName": parentTable.noInfoPath.entityName,
+						"primaryKey": parentTable.noInfoPath.primaryKey
+					},
+					exportDS = noDataSource.create(dsConfig, $rootScope);
 
-				return noFileCache.noOne(change.data)
+				return exportDS.one(change.data[schema.primaryKey])
 					.then(function (fileObj, fileKeyName, file) {
 						var payload = new FormData(),
 							url = noConfig.current.NOREST + "/aws/bucket/" + fileObj.name,
