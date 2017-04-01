@@ -276,6 +276,9 @@
 				syncError = false;
 
 			function _addFile(change, schema) {
+				return $q(function(resolve, reject){
+
+
 				var parentTable = db[change.schema.entityName],
 					parentSchema = parentTable.noInfoPath.parentSchema.config,
 					dsConfig = {
@@ -286,7 +289,7 @@
 					},
 					exportDS = noDataSource.create(dsConfig, $rootScope);
 
-				return exportDS.one(change.data[schema.primaryKey])
+				exportDS.readDocument(change.data)
 					.then(function (fileObj, file) {
 						var payload = new FormData(),
 							url = noConfig.current.NOREST + "/aws/bucket",
@@ -306,65 +309,75 @@
 						noHTTP.noRequest(url, options, payload)
 							.then(function () {
 								console.log("File cached upstream.", schema);
+								resolve();
 							})
 							.catch(function (err) {
 								console.error(err);
+								reject(err);
 							});
 
 					}.bind(null, change.data))
 					.catch(function (err) {
 						console.error(err);
+						reject(err);
 					});
+
+				})
 			}
 
 			function _deleteFile(change, schema) {
-				var parentTable = db[change.schema.entityName],
-					parentSchema = parentTable.noInfoPath.parentSchema.config,
-					dsConfig = {
-						"dataProvider": parentSchema.provider,
-						"databaseName": parentSchema.dbName,
-						"entityName": parentTable.noInfoPath.entityName,
-						"primaryKey": parentTable.noInfoPath.primaryKey
-					},
-					exportDS = noDataSource.create(dsConfig, $rootScope);
+				return $q(function(resolve, reject){
 
-				return exportDS.one(change.data[schema.primaryKey])
-					.then(function (fileObj, fileKeyName, file) {
-						var payload = new FormData(),
-							url = noConfig.current.NOREST + "/aws/bucket/" + fileObj.name,
-							options = {
-								method: "DELETE"
-							};
+					var parentTable = db[change.schema.entityName],
+						parentSchema = parentTable.noInfoPath.parentSchema.config,
+						dsConfig = {
+							"dataProvider": parentSchema.provider,
+							"databaseName": parentSchema.dbName,
+							"entityName": parentTable.noInfoPath.entityName,
+							"primaryKey": parentTable.noInfoPath.primaryKey
+						},
+						exportDS = noDataSource.create(dsConfig, $rootScope);
 
-						noHTTP.noRequest(url, options)
-							.then(function () {
-								console.log("File deleted upstream.", schema);
-							})
-							.catch(function (err) {
-								console.error(err);
-							});
+					// exportDS.readDocument(change.data)
+					// 	.then(function (fileObj, fileKeyName, file) {
+							var payload = new FormData(),
+								url = noConfig.current.NOREST + "/aws/bucket/" + change.data.name,
+								options = {
+									method: "DELETE"
+								};
 
-					}.bind(null, change.data, schema.primaryKey))
-					.catch(function (err) {
-						console.error(err);
-					});
+							noHTTP.noRequest(url, options)
+								.then(function () {
+									console.log("File deleted upstream.", schema);
+									resolve();
+								})
+								.catch(function (err) {
+									console.error(err);
+									reject(err);
+								});
+
+						// }.bind(null, change.data, schema.primaryKey))
+						// .catch(function (err) {
+						// 	console.error(err);
+						// 	reject(err);
+						// });
+
+				});
 			}
 
 			function _processOutboundFile(change, schema) {
-				//1. Get the file data using $http
 				switch (change.changeType) {
-				case "C":
-					return _addFile(change, schema);
+					case "C":
+						return _addFile(change, schema);
+			
+					case "U":
+						return _deleteFile(change, schema)
+							.then(_addFile.bind(null, change, schema));
 
-					// case "U":
-					// 	return _deleteFile(change, schema)
-					// 		.then(_addFile.bind(null, change, schema));
-
-				case "D":
-					return _deleteFile(change, schema);
-
-				}
-
+					case "D":
+						return _deleteFile(change, schema);
+					
+					}
 			}
 
 			function _processOutboundFiles(datum) {
@@ -388,7 +401,6 @@
 				} else {
 					return $q.when(datum);
 				}
-
 			}
 
 			function _sendChanges(datum) {
@@ -416,9 +428,7 @@
 								.catch(reject);
 						}
 					});
-
 				});
-
 			}
 
 			function recurse() {
@@ -443,7 +453,6 @@
 							$rootScope.sync.inProgress = false;
 						});
 				}
-
 			}
 
 			noTransactionCache.getAllPending()
@@ -463,7 +472,6 @@
 				.catch(function (err) {
 					console.error(err);
 				});
-
 		});
 	}
 
@@ -546,7 +554,6 @@
 					console.log("unauthorized: " + JSON.stringify(msg.data));
 					throw new Error(msg.data.type);
 				});
-
 		});
 
 		socket.on(noSync_lastSyncVersion, monitorRemoteChanges);
@@ -597,7 +604,6 @@
 		});
 
 		return $q.when(true);
-
 	};
 }
 
