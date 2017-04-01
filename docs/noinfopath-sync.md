@@ -1,5 +1,5 @@
 # noinfopath-sync
-@version 2.0.26
+@version 2.0.27
 
 ## Overview
 Provides data synchronization services.
