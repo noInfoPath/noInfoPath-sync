@@ -43,7 +43,7 @@
 						};
 
 					function _notify(data) {
-						console.log("notify", data);
+						//console.log("notify", data);
 						if (data.isSame) {
 							stats.skipped += 1;
 						} else {
@@ -115,7 +115,7 @@
 									return;
 								}
 
-								console.info("Syncing table", change.tableName);
+								//console.info("Syncing table", change.tableName);
 
 								table.noImport(change)
 									.then(_importFile.bind(null, table, change))
@@ -369,14 +369,14 @@
 				switch (change.changeType) {
 					case "C":
 						return _addFile(change, schema);
-			
+
 					case "U":
 						return _deleteFile(change, schema)
 							.then(_addFile.bind(null, change, schema));
 
 					case "D":
 						return _deleteFile(change, schema);
-					
+
 					}
 			}
 

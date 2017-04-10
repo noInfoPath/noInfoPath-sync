@@ -1,6 +1,6 @@
 {
 	"name": "@noinfopath/noinfopath-sync",
-	"version": "2.0.27",
+	"version": "2.0.28",
 	"description": "noInfoPath sync module",
 	"main": "noinfopath-sync.js",
 	"directories": {

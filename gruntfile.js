@@ -38,7 +38,7 @@ module.exports = function(grunt) {
 			}
 		},
 		watch: {
-			"working" : {
+			"dev" : {
 				files: ['src/*.js', 'test/**/*.spec.js'],
 				tasks: ['compile']
 			}

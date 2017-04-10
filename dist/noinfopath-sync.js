@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.27
+*	@version 2.0.28
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -254,7 +254,7 @@
 						};
 
 					function _notify(data) {
-						console.log("notify", data);
+						//console.log("notify", data);
 						if (data.isSame) {
 							stats.skipped += 1;
 						} else {
@@ -326,7 +326,7 @@
 									return;
 								}
 
-								console.info("Syncing table", change.tableName);
+								//console.info("Syncing table", change.tableName);
 
 								table.noImport(change)
 									.then(_importFile.bind(null, table, change))
@@ -580,14 +580,14 @@
 				switch (change.changeType) {
 					case "C":
 						return _addFile(change, schema);
-			
+
 					case "U":
 						return _deleteFile(change, schema)
 							.then(_addFile.bind(null, change, schema));
 
 					case "D":
 						return _deleteFile(change, schema);
-					
+
 					}
 			}
 
@@ -936,7 +936,7 @@ angular.module("noinfopath.sync")
 
 			function _link(scope, el, attrs){
 				var b = el.find("button"), unWatch;
-				
+
 				b.click(_alertIconClicked.bind(null, scope));
 
 				unWatch = scope.$watch("sync.pending", function(n, o, s){
