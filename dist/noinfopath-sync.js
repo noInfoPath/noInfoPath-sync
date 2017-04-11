@@ -749,19 +749,19 @@
 					token: noLoginService.user.access_token
 				})
 				.on('authenticated', function () {
-					if (!initialLoad) noNotificationService.appendMessage("Connection to Data Transaction Coordinator Service successful.", {
-						id: "connected",
-						type: "success"
-					});
+					// if (!initialLoad) noNotificationService.appendMessage("Connection to Data Transaction Coordinator Service successful.", {
+					// 	id: "connected",
+					// 	type: "success"
+					// });
 					initialLoad = false;
 					$rootScope.sync.update("state", "connected");
 					$rootScope.$apply();
 				})
 				.on('unauthorized', function (msg) {
-					noNotificationService.appendMessage("Failed to authenticate with Data Transaction Coordinator Service.", {
-						id: "unauthorized",
-						type: "warning"
-					});
+					// noNotificationService.appendMessage("Failed to authenticate with Data Transaction Coordinator Service.", {
+					// 	id: "unauthorized",
+					// 	type: "warning"
+					// });
 					console.log("unauthorized: " + JSON.stringify(msg.data));
 					throw new Error(msg.data.type);
 				});
@@ -770,11 +770,11 @@
 		socket.on(noSync_lastSyncVersion, monitorRemoteChanges);
 
 		socket.on("connect_error", function (err) {
-			if (!initialLoad) noNotificationService.appendMessage("Lost connection to Data Transaction Coordinator Service.", {
-				id: "disconnected",
-				type: "danger",
-				ttl: "2"
-			});
+			// if (!initialLoad) noNotificationService.appendMessage("Lost connection to Data Transaction Coordinator Service.", {
+			// 	id: "disconnected",
+			// 	type: "danger",
+			// 	ttl: "2"
+			// });
 			initialLoad = false;
 			$rootScope.sync.update("state", "disconnected");
 			$rootScope.sync.update("error", err);
