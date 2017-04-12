@@ -305,6 +305,8 @@
 						payload.append("name", fileObj.name);
 						payload.append("type", fileObj.type);
 						payload.append("size", fileObj.size);
+						payload.append("DocumentID", fileObj.ID);
+						payload.append("ext", noMimeTypes.fromMimeType(fileObj.type));
 
 						noHTTP.noRequest(url, options, payload)
 							.then(function () {
@@ -322,7 +324,7 @@
 						reject(err);
 					});
 
-				})
+				});
 			}
 
 			function _deleteFile(change, schema) {
@@ -341,7 +343,7 @@
 					// exportDS.readDocument(change.data)
 					// 	.then(function (fileObj, fileKeyName, file) {
 							var payload = new FormData(),
-								url = noConfig.current.NOREST + "/aws/bucket/" + change.data.name,
+								url = noConfig.current.NOREST + "/aws/bucket/" + change.data.ID + "." + noMimeTypes.fromMimeType(change.data.type),
 								options = {
 									method: "DELETE"
 								};
