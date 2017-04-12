@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.29
+*	@version 2.0.30
 *
 *	## Overview
 *	Provides data synchronization services.
