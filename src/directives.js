@@ -22,7 +22,7 @@
 		}])
 		.directive("noAlert", ["noConfig", "noPrompt", "noTemplateCache", "noSync", function(noConfig, noPrompt,noTemplateCache, noSync){
 			//<div class="no-flex horizontal flex-around flex-middle"><button class="btn btn-warning btn-xs btn-callback">Import Now</button><button class="btn btn-warning btn-xs">Maybe Later</button></div>
-			function _importChanges(version) {
+			function _importChanges(scope, version) {
 				noPrompt.hide();
 
 				noPrompt.show(
@@ -31,19 +31,25 @@
 				);
 
 				if(version) {
-					noSync.force("rmEFR2", version, function(){
-						noPrompt.hide(250);
-					});
+					noSync.force("rmEFR2", version)
+						.then(function(){
+							scope.sync.finished();
+							noSync.updateSyncStatus();
+							noPrompt.hide(250);
+						});
 				} else {
-					noSync.importChanges("rmEFR2", function(){
-						noPrompt.hide(250);
-					});
+					noSync.importChanges("rmEFR2")
+						.then(function(){
+							scope.sync.finished();
+							noSync.updateSyncStatus();
+							noPrompt.hide(250);
+						});
 				}
 			}
 
-			function _promptCallback(e) {
+			function _promptCallback(scope, e) {
 				if($(e.target).attr("value") === "immport") {
-					_importChanges();
+					_importChanges(scope);
 				} else {
 					noPrompt.hide();
 				}
@@ -51,7 +57,7 @@
 
 			function _promptCallbackDebug(scope, e) {
 				if($(e.target).attr("value") === "immport") {
-					_importChanges(scope.tmpVersion);
+					_importChanges(scope, scope.tmpVersion);
 				} else {
 					noPrompt.hide();
 				}
@@ -90,7 +96,7 @@
 							noPrompt.show(
 								"Data Update Available",
 								tmpl,
-								_promptCallback,
+								_promptCallback.bind(null, scope),
 								{
 									showCloseButton: true,
 									showFooter: {

@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.30
+*	@version 2.0.31
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -109,11 +109,11 @@
 			},
 			set: function(v) {
 
-				_prevVersion = _version;
+				//_prevVersion = _version;
 				_version = v || _version;
 				_pending = true;
 				_inProgress = false;
-				_internalDate = new Date();
+				//_internalDate = new Date();
 			}
 		});
 
@@ -154,7 +154,11 @@
 		//Merge with data
 		if(data) {
 			//this.lastSyncTimestamp = data.lastSyncTimestamp || this.lastSyncTimestamp;
-			this.current = data.version;
+			//this.current = data.version;
+			_internalDate = new Date(data.lastSyncTimestamp);
+			_prevVersion  = data.previous;
+			_version = data.current;
+			_pending = data.pending;
 		}
 
 		/*
@@ -211,317 +215,340 @@
 
 //socket.js
 (function (angular, io) {
-		"use strict";
+	"use strict";
 
-		function NoSyncService($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLoginService, noTransactionCache, _, noDataSource, noHTTP, noPrompt, noNotificationService, noTemplateCache, PubSub, noMimeTypes) {
-			var noSync_lastSyncVersion = "noSync_lastSyncVersion",
-				noSync_getRemoteChanges = "remoteChanges",
-				noSync_sendLocalChanges = "localChanges",
-				noSync_newChangesAvailable = "newChangesAvailable",
-				noSync_dataReceived = "noSync::dataReceived",
-				noSync_localDataUpdated = "noTransactionCache::localDataUpdated",
-				db, socket, unbindMonitorLocalChanges, force = false;
+	function NoSyncService($injector, $timeout, $q, $rootScope, noLocalStorage, noConfig, noLoginService, noTransactionCache, _, noDataSource, noHTTP, noPrompt, noNotificationService, noTemplateCache, PubSub, noMimeTypes, noFileSystem) {
+		var noSync_lastSyncVersion = "noSync_lastSyncVersion",
+			noSync_getRemoteChanges = "remoteChanges",
+			noSync_sendLocalChanges = "localChanges",
+			noSync_newChangesAvailable = "newChangesAvailable",
+			noSync_dataReceived = "noSync::dataReceived",
+			noSync_localDataUpdated = "noTransactionCache::localDataUpdated",
+			db, socket, unbindMonitorLocalChanges, force = false;
 
-			function monitorLocalChanges() {
-				console.info("Monitoring local changes.");
-				if (!unbindMonitorLocalChanges) {
-					unbindMonitorLocalChanges = $rootScope.$on(noSync_localDataUpdated, runChecks);
-
-				}
+		function monitorLocalChanges() {
+			console.info("Monitoring local changes.");
+			if (!unbindMonitorLocalChanges) {
+				unbindMonitorLocalChanges = $rootScope.$on(noSync_localDataUpdated, runChecks);
 			}
-
-			//NOTE: This might not be needed other than for debugging.
-			function stopMonitoringLocalChanges() {
-				//if ($rootScope.sync.state === "connected") {
-				console.log("Stopping local change monitor.");
-				if (unbindMonitorLocalChanges) {
-					unbindMonitorLocalChanges();
-					unbindMonitorLocalChanges = null;
-				}
-				//}
-			}
-
-			function _importChanges(syncData) {
-
-				return $q(function (resolve, reject) {
-
-					var ci = 0,
-						changes = _.sortBy(syncData.changes, "version"),
-						stats = {
-							total: syncData.changes.length,
-							skipped: 0,
-							synced: 0
-						};
-
-					function _notify(data) {
-						//console.log("notify", data);
-						if (data.isSame) {
-							stats.skipped += 1;
-						} else {
-							stats.synced += 1;
-							//$rootScope.$broadcast(noSync_dataReceived, data);
-						}
-					}
-
-					function _importFile(parentTable, change) {
-						var parentSchema = parentTable.noInfoPath.parentSchema.config,
-							dsConfig = {
-								"dataProvider": parentSchema.provider,
-								"databaseName": parentSchema.dbName,
-								"entityName": parentTable.noInfoPath.entityName,
-								"primaryKey": parentTable.noInfoPath.primaryKey
-							},
-							importDS = noDataSource.create(dsConfig, $rootScope);
-
-						switch(change.operation){
-							case "C":
-								var fileObj = change.values,
-									url = noConfig.current.NOREST + "/aws/bucket/" + fileObj.name,
-									options = {
-										method: "GET",
-										headers: {
-											"Content-Type": undefined
-										},
-										responseType: "arraybuffer"
-									};
-
-								return noHTTP.noRequest(url, options)
-									.then(function (resp) {
-										var file = new File([resp.data], fileObj.name, {
-											type: fileObj.type
-										});
-
-										file.DocumentID = fileObj.ID;
-
-										return importDS.createDocument(fileObj, file);
-										//console.log("File cached upstream.", schema);
-									})
-									.catch(function (err) {
-										console.error(err);
-									});
-
-							case "U":
-								return importDS.update(change.values);
-							case "D":
-								return importDS.destroy(change.changedPKID);
-						}
-					}
-
-					function _recurse() {
-						if (!changes) {
-							reject("No changes received due to server side error.");
-							return;
-						}
-
-						var change = changes[ci++],
-							table;
-
-						if (change) {
-							//May need to compare to previous.version not current.version
-							if ((noConfig.current.debug && force) || change.version > $rootScope.sync.previous.version) {
-								table = db[change.tableName];
-
-								if (!table) {
-									_recurse();
-									return;
-								}
-
-								//console.info("Syncing table", change.tableName);
-
-								table.noImport(change)
-									.then(_importFile.bind(null, table, change))
-									.then(_notify.bind(null, change))
-									.then(_recurse)
-									.catch(function (err) {
-										console.error("Import Error", err, change.tableName);
-										_recurse();
-									});
-							} else {
-								stats.skipped += 1;
-								_recurse();
-							}
-						} else {
-							console.log("Sync complete.\nTotal Changes Process:", stats.total, "\nChanges Skipped:", stats.skipped, "\nChanges Imported:", stats.synced);
-
-							updateSyncStatus(syncData);
-							PubSub.publish("noSync::complete", true);
-							resolve();
-						}
-				}
-
-				_recurse();
-			});
-	}
-
-	function updateSyncStatus(version) {
-		//if(version) $rootScope.sync.update("version", version);
-		$rootScope.sync.current = version;
-		noLocalStorage.setItem(noSync_lastSyncVersion, $rootScope.sync.toJSON());
-	}
-	this.updateSyncStatus = updateSyncStatus;
-
-	function _isGoodNamespace(ns) {
-		var t = $rootScope.noDbSchema_names.find(function (element) {
-			console.log(element);
-			return ("noDbSchema_" + ns) === element;
-		});
-
-		return !!t;
-	}
-
-	function _askForChanges(version, namespace) {
-
-		var deferred = $q.defer();
-
-		var req = {
-			jwt: noLoginService.user.access_token,
-			lastSyncVersion: version, //- 1,
-			namespace: namespace
-		};
-
-		socket.emit(noSync_getRemoteChanges, req, function (syncData) {
-			//console.log("syncData", syncData);
-			if (syncData) {
-				if (syncData.changes.length > 0) {
-					console.info("New data changes are available...");
-					$rootScope.sync.start();
-					_importChanges(syncData)
-						.then(deferred.resolve)
-						.catch(deferred.reject);
-				} else {
-					deferred.resolve("No changes to import");
-				}
-			} else {
-				console.warn("syncData was null");
-				deferred.resolve("warning: syncData was null");
-			}
-		});
-
-		return deferred.promise;
-	}
-
-	function monitorRemoteChanges(version) {
-		$rootScope.sync.current = version;
-
-		// if (!$rootScope.sync.inProgress && $rootScope.sync.needChanges) {
-		// 	noTemplateCache.get("templates/sync-notification.tpl.html")
-		// 		.then(function(tmpl){
-		// 			noNotificationService.appendMessage(tmpl, {id: "changes-available", dismissible: true, type: "warning"});
-		// 		});
-		//
-		// 	//_startImport(version);
-		// }
-	}
-
-	function _forceImport(namespace, version, cb) {
-		force = true;
-		_startImport(namespace, cb, version);
-	}
-	this.force = _forceImport;
-
-	function _startImport(namespace, cb, version) {
-		var sync = $rootScope.sync;
-
-		if (_isGoodNamespace(namespace)) {
-
-			if (sync.needChanges) {
-				console.info("Version update available for", namespace, "\n", sync.toString());
-
-				_askForChanges(version || sync.previous.version, namespace)
-					.then(function (msg) {
-						console.log(msg || "Lastest changes have been imported.");
-						return msg;
-					})
-					.catch(function (err) {
-						sync.update("error", err);
-						console.error(err);
-					})
-					.finally(function (sync, message) {
-						force = false;
-						//var ts = moment();
-						sync.finished();
-						console.log("Sync Complete\n", sync.toString());
-						if (cb) {
-							cb($rootScope.sync, message);
-						} else {
-							//$rootScope.$broadcast("sync::change", sync);
-						}
-					}.bind(null, sync));
-			}
-		} else {
-			throw "noSync:importChanges requires a a valid namespace.";
 		}
 
-	}
-	this.importChanges = _startImport;
+		//NOTE: This might not be needed other than for debugging.
+		function stopMonitoringLocalChanges() {
+			//if ($rootScope.sync.state === "connected") {
+			console.log("Stopping local change monitor.");
+			if (unbindMonitorLocalChanges) {
+				unbindMonitorLocalChanges();
+				unbindMonitorLocalChanges = null;
+			}
+			//}
+		}
 
-	function _syncException(msg, datum, err) {
-		return $q(function (resolve, reject) {
-			datum.state = "exception";
-			datum.exception = {
-				orginalChangeID: datum.ChangeID,
-				message: msg,
-				error: err,
-				userId: noLoginService.user.userId,
-				timeStamp: new Date()
-			};
-
-			datum.ChangeID = noInfoPath.createUUID();
-
-			if (noConfig.current.debug) console.error("Exception has been logged", datum);
-
-			socket.emit(noSync_sendLocalChanges, datum, function (resp) {
-				noTransactionCache.logException(datum)
-					.then(resolve)
-					.catch(reject);
-			});
-		});
+		function _importChanges(syncData, deferred) {
 
 
-	}
+			var ci = 0,
+				changes = _.sortBy(syncData.changes, "version"),
+				stats = {
+					total: syncData.changes.length,
+					skipped: 0,
+					synced: 0
+				};
 
-	function digestLocalChanges() {
-		return $q(function (resolve, reject) {
-			var d = 0,
-				data = [],
-				syncError = false;
+			function _notify(data) {
+				//console.log("notify", data);
+				if (data.isSame) {
+					stats.skipped += 1;
+				} else {
+					stats.synced += 1;
+					//$rootScope.$broadcast(noSync_dataReceived, data);
+				}
+			}
 
-			function _addFile(change, schema) {
-				return $q(function(resolve, reject){
+			function _importFile(parentTable, change) {
+				if (!parentTable.noInfoPath.NoInfoPath_FileUploadCache) return;
 
-
-				var parentTable = db[change.schema.entityName],
-					parentSchema = parentTable.noInfoPath.parentSchema.config,
+				var parentSchema = parentTable.noInfoPath.parentSchema.config,
 					dsConfig = {
 						"dataProvider": parentSchema.provider,
 						"databaseName": parentSchema.dbName,
 						"entityName": parentTable.noInfoPath.entityName,
 						"primaryKey": parentTable.noInfoPath.primaryKey
 					},
-					exportDS = noDataSource.create(dsConfig, $rootScope);
+					importDS = noDataSource.create(dsConfig, $rootScope),
+					noFileCache = noFileSystem.getDatabase(parentSchema).NoFileCache;
 
-				exportDS.readDocument(change.data)
-					.then(function (fileObj, file) {
-						var payload = new FormData(),
-							url = noConfig.current.NOREST + "/aws/bucket",
+				switch (change.operation) {
+					case "I":
+
+						var fileObj = change.values,
+							url = noConfig.current.NOREST + "/aws/bucket/" + fileObj.ID + "." + noMimeTypes.fromMimeType(fileObj.type),
 							options = {
-								method: "POST",
+								method: "GET",
 								headers: {
 									"Content-Type": undefined
 								},
-								transformRequest: angular.identity
+								responseType: "arraybuffer"
 							};
 
-						payload.append("file", file);
-						payload.append("name", fileObj.name);
-						payload.append("type", fileObj.type);
-						payload.append("size", fileObj.size);
-						payload.append("DocumentID", fileObj.ID);
-						payload.append("ext", noMimeTypes.fromMimeType(fileObj.type));
+						return noHTTP.noRequest(url, options)
+							.then(function (resp) {
+								var file = new File([resp.data], fileObj.name, {
+									type: fileObj.type
+								});
 
-						noHTTP.noRequest(url, options, payload)
+								file.DocumentID = fileObj.ID;
+
+								return noFileCache.noCreate(file); //importDS.createDocument(fileObj, file);
+								//console.log("File cached upstream.", schema);
+							})
+							.catch(function (err) {
+								console.error(err);
+							});
+
+					case "U":
+						return importDS.update(change.values);
+					case "D":
+						return importDS.destroy(change.changedPKID);
+				}
+			}
+
+			function _recurse() {
+				if (!changes) {
+					deferred.reject("No changes received due to server side error.");
+
+					return;
+				}
+
+				var change = changes[ci++],
+					table;
+
+				if (change) {
+					deferred.notify({change: change, total: changes.length, current: ci});
+
+					//May need to compare to previous.version not current.version
+					if ((noConfig.current.debug && force) || change.version > $rootScope.sync.previous.version) {
+						table = db[change.tableName];
+
+						if (!table) {
+							_recurse();
+							return;
+						}
+
+						//console.info("Syncing table", change.tableName);
+
+						table.noImport(change)
+							.then(_importFile.bind(null, table, change))
+							.then(_notify.bind(null, change))
+							.then(_recurse)
+							.catch(function (err) {
+								console.error("Import Error", err, change.tableName);
+								_recurse();
+							});
+					} else {
+						stats.skipped += 1;
+						_recurse();
+					}
+				} else {
+					console.log("Sync complete.\nTotal Changes Process:", stats.total, "\nChanges Skipped:", stats.skipped, "\nChanges Imported:", stats.synced);
+					PubSub.publish("noSync::complete", true);
+					deferred.resolve();
+				}
+			}
+
+			_recurse();
+		}
+
+		function updateSyncStatus(version) {
+			//if(version) $rootScope.sync.update("version", version);
+			//$rootScope.sync.current = version;
+			noLocalStorage.setItem(noSync_lastSyncVersion, $rootScope.sync.toJSON());
+		}
+		this.updateSyncStatus = updateSyncStatus;
+
+		function _isGoodNamespace(ns) {
+			var t = $rootScope.noDbSchema_names.find(function (element) {
+				console.log(element);
+				return ("noDbSchema_" + ns) === element;
+			});
+
+			return !!t;
+		}
+
+		function _askForChanges(version, namespace, deferred) {
+			var req = {
+				jwt: noLoginService.user.access_token,
+				lastSyncVersion: version, //- 1,
+				namespace: namespace
+			};
+
+			console.log("_askForChanges", req);
+
+			socket.emit(noSync_getRemoteChanges, req, function (syncData) {
+				//console.log("syncData", syncData);
+				if (syncData) {
+					if (syncData.changes.length > 0) {
+						console.info("New data changes are available...");
+						$rootScope.sync.start();
+						_importChanges(syncData, deferred);
+						// 	.then(deferred.resolve)
+						// 	.catch(deferred.reject)
+						// 	.finally(null, deferred.notify);
+					} else {
+						deferred.resolve("No changes to import");
+					}
+				} else {
+					console.warn("syncData was null");
+					deferred.resolve("warning: syncData was null");
+				}
+			});
+		}
+
+		function monitorRemoteChanges(version) {
+			$rootScope.sync.current = version;
+
+			// if (!$rootScope.sync.inProgress && $rootScope.sync.needChanges) {
+			// 	noTemplateCache.get("templates/sync-notification.tpl.html")
+			// 		.then(function(tmpl){
+			// 			noNotificationService.appendMessage(tmpl, {id: "changes-available", dismissible: true, type: "warning"});
+			// 		});
+			//
+			// 	//_startImport(version);
+			// }
+		}
+
+		function _forceImport(namespace, version, cb) {
+			force = true;
+			return _startImport(namespace, cb, version);
+		}
+		this.force = _forceImport;
+
+		function _startImport(namespace, cb, version) {
+			var sync = $rootScope.sync,
+				deferred = $q.defer();
+
+			if (_isGoodNamespace(namespace)) {
+
+				if (sync.needChanges) {
+					console.info("Version update available for", namespace, "\n", sync.toString());
+					_askForChanges(version || sync.previous.version, namespace, deferred);
+				}
+			} else {
+				throw "noSync:importChanges requires a a valid namespace.";
+			}
+
+			return deferred.promise;
+
+		}
+		this.importChanges = _startImport;
+
+		function _syncException(msg, datum, err) {
+			return $q(function (resolve, reject) {
+				datum.state = "exception";
+				datum.exception = {
+					orginalChangeID: datum.ChangeID,
+					message: msg,
+					error: err,
+					userId: noLoginService.user.userId,
+					timeStamp: new Date()
+				};
+
+				datum.ChangeID = noInfoPath.createUUID();
+
+				if (noConfig.current.debug) console.error("Exception has been logged", datum);
+
+				socket.emit(noSync_sendLocalChanges, datum, function (resp) {
+					noTransactionCache.logException(datum)
+						.then(resolve)
+						.catch(reject);
+				});
+			});
+
+
+		}
+
+		function digestLocalChanges() {
+			return $q(function (resolve, reject) {
+				var d = 0,
+					data = [],
+					syncError = false;
+
+				function _addFile(change, schema) {
+					return $q(function (resolve, reject) {
+
+
+						var parentTable = db[change.schema.entityName],
+							parentSchema = parentTable.noInfoPath.parentSchema.config,
+							dsConfig = {
+								"dataProvider": parentSchema.provider,
+								"databaseName": parentSchema.dbName,
+								"entityName": parentTable.noInfoPath.entityName,
+								"primaryKey": parentTable.noInfoPath.primaryKey
+							},
+							exportDS = noDataSource.create(dsConfig, $rootScope);
+
+						exportDS.readDocument(change.data)
+							.then(function (fileObj, file) {
+								var payload = new FormData(),
+									url = noConfig.current.NOREST + "/aws/bucket",
+									options = {
+										method: "POST",
+										headers: {
+											"Content-Type": undefined
+										},
+										transformRequest: angular.identity
+									};
+
+								payload.append("file", file);
+								payload.append("name", fileObj.name);
+								payload.append("type", fileObj.type);
+								payload.append("size", fileObj.size);
+								payload.append("DocumentID", fileObj.ID);
+								payload.append("ext", noMimeTypes.fromMimeType(fileObj.type));
+
+								noHTTP.noRequest(url, options, payload)
+									.then(function () {
+										console.log("File cached upstream.", schema);
+										resolve();
+									})
+									.catch(function (err) {
+										console.error(err);
+										reject(err);
+									});
+
+							}.bind(null, change.data))
+							.catch(function (err) {
+								console.error(err);
+								reject(err);
+							});
+
+					});
+				}
+
+				function _deleteFile(change, schema) {
+					return $q(function (resolve, reject) {
+
+						var parentTable = db[change.schema.entityName],
+							parentSchema = parentTable.noInfoPath.parentSchema.config,
+							dsConfig = {
+								"dataProvider": parentSchema.provider,
+								"databaseName": parentSchema.dbName,
+								"entityName": parentTable.noInfoPath.entityName,
+								"primaryKey": parentTable.noInfoPath.primaryKey
+							},
+							exportDS = noDataSource.create(dsConfig, $rootScope);
+
+						// exportDS.readDocument(change.data)
+						// 	.then(function (fileObj, fileKeyName, file) {
+						var payload = new FormData(),
+							url = noConfig.current.NOREST + "/aws/bucket/" + change.data.ID + "." + noMimeTypes.fromMimeType(change.data.type),
+							options = {
+								method: "DELETE"
+							};
+
+						noHTTP.noRequest(url, options)
 							.then(function () {
-								console.log("File cached upstream.", schema);
+								console.log("File deleted upstream.", schema);
 								resolve();
 							})
 							.catch(function (err) {
@@ -529,57 +556,17 @@
 								reject(err);
 							});
 
-					}.bind(null, change.data))
-					.catch(function (err) {
-						console.error(err);
-						reject(err);
-					});
-
-				});
-			}
-
-			function _deleteFile(change, schema) {
-				return $q(function(resolve, reject){
-
-					var parentTable = db[change.schema.entityName],
-						parentSchema = parentTable.noInfoPath.parentSchema.config,
-						dsConfig = {
-							"dataProvider": parentSchema.provider,
-							"databaseName": parentSchema.dbName,
-							"entityName": parentTable.noInfoPath.entityName,
-							"primaryKey": parentTable.noInfoPath.primaryKey
-						},
-						exportDS = noDataSource.create(dsConfig, $rootScope);
-
-					// exportDS.readDocument(change.data)
-					// 	.then(function (fileObj, fileKeyName, file) {
-							var payload = new FormData(),
-								url = noConfig.current.NOREST + "/aws/bucket/" + change.data.ID + "." + noMimeTypes.fromMimeType(change.data.type),
-								options = {
-									method: "DELETE"
-								};
-
-							noHTTP.noRequest(url, options)
-								.then(function () {
-									console.log("File deleted upstream.", schema);
-									resolve();
-								})
-								.catch(function (err) {
-									console.error(err);
-									reject(err);
-								});
-
 						// }.bind(null, change.data, schema.primaryKey))
 						// .catch(function (err) {
 						// 	console.error(err);
 						// 	reject(err);
 						// });
 
-				});
-			}
+					});
+				}
 
-			function _processOutboundFile(change, schema) {
-				switch (change.changeType) {
+				function _processOutboundFile(change, schema) {
+					switch (change.changeType) {
 					case "C":
 						return _addFile(change, schema);
 
@@ -591,238 +578,237 @@
 						return _deleteFile(change, schema);
 
 					}
-			}
-
-			function _processOutboundFiles(datum) {
-				//Check the changes for entities that relate to files.
-				var schema = noInfoPath.getItem($rootScope, "noDbSchema_" + datum.namespace),
-					promises = [];
-
-				if (!schema) throw new Error("Invalid namespace provided in NoTransaction object.");
-
-				if(!!datum.cachedFiles.length) {
-					datum.cachedFiles.forEach(function(fileChange){
-						console.log("fileChange", fileChange);
-						promises.push(_processOutboundFile(fileChange, fileChange.schema)
-							.catch(_syncException.bind(null, "An error occur processing inbound client-side changes", datum)));
-					});
-
-					return $q.all(promises).then(function (results) {
-						console.log(results);
-						return datum;
-					});
-				} else {
-					return $q.when(datum);
 				}
-			}
 
-			function _sendChanges(datum) {
-				return $q(function (resolve, reject) {
-					socket.emit(noSync_sendLocalChanges, datum, function (resp) {
-						//noLogService.log(resp);
-						if (resp.status === -1) {
-							_syncException(resp.message, datum, resp.originalError)
-								.then(resolve)
-								.catch(reject);
+				function _processOutboundFiles(datum) {
+					//Check the changes for entities that relate to files.
+					var schema = noInfoPath.getItem($rootScope, "noDbSchema_" + datum.namespace),
+						promises = [];
 
-							//console.warn("TODO: Revisit noSync_sendLocalChanges response of -1");
+					if (!schema) throw new Error("Invalid namespace provided in NoTransaction object.");
 
-							// $rootScope.sync.inProgress = false;
-							// $rootScope.sync.error = resp.message;
-							// $rootScope.sync.state = "connecting";
-							//$timeout(runChecks, 5 * 60 * 1000);
-							// reject({
-							// 	message: "digestLocalChanges error, will retry every 5 minutes until successful.",
-							// 	error: resp
-							// });
-						} else {
-							noTransactionCache.markTransactionSynced(datum)
-								.then(resolve)
-								.catch(reject);
-						}
-					});
-				});
-			}
-
-			function recurse() {
-				var datum = data[d++];
-
-				if (datum) {
-					datum.jwt = noLoginService.user.access_token;
-					_processOutboundFiles(datum)
-						.then(_sendChanges.bind(null, datum))
-						.catch(function (err) {
-							_syncException("An error occur processing inbound client-side changes", datum, err)
-								.then(_sendChanges.bind(null, datum));
-						})
-						.finally(recurse);
-
-				} else {
-					$rootScope.sync.inProgress = false;
-					noTransactionCache.dropAllSynced()
-						.then(resolve)
-						.catch(reject)
-						.finally(function(){
-							$rootScope.sync.inProgress = false;
+					if (!!datum.cachedFiles.length) {
+						datum.cachedFiles.forEach(function (fileChange) {
+							console.log("fileChange", fileChange);
+							promises.push(_processOutboundFile(fileChange, fileChange.schema)
+								.catch(_syncException.bind(null, "An error occur processing inbound client-side changes", datum)));
 						});
-				}
-			}
 
-			noTransactionCache.getAllPending()
-				.then(function (resp) {
-					data = resp;
-					console.log("Local changes: " + (!!resp ? resp.length : 0));
-
-					$rootScope.sync.inProgress = !!data.length;
-
-					if ($rootScope.sync.inProgress) {
-						recurse();
+						return $q.all(promises).then(function (results) {
+							console.log(results);
+							return datum;
+						});
 					} else {
-						resolve();
+						return $q.when(datum);
 					}
+				}
+
+				function _sendChanges(datum) {
+					return $q(function (resolve, reject) {
+						socket.emit(noSync_sendLocalChanges, datum, function (resp) {
+							//noLogService.log(resp);
+							if (resp.status === -1) {
+								_syncException(resp.message, datum, resp.originalError)
+									.then(resolve)
+									.catch(reject);
+
+								//console.warn("TODO: Revisit noSync_sendLocalChanges response of -1");
+
+								// $rootScope.sync.inProgress = false;
+								// $rootScope.sync.error = resp.message;
+								// $rootScope.sync.state = "connecting";
+								//$timeout(runChecks, 5 * 60 * 1000);
+								// reject({
+								// 	message: "digestLocalChanges error, will retry every 5 minutes until successful.",
+								// 	error: resp
+								// });
+							} else {
+								noTransactionCache.markTransactionSynced(datum)
+									.then(resolve)
+									.catch(reject);
+							}
+						});
+					});
+				}
+
+				function recurse() {
+					var datum = data[d++];
+
+					if (datum) {
+						datum.jwt = noLoginService.user.access_token;
+						_processOutboundFiles(datum)
+							.then(_sendChanges.bind(null, datum))
+							.catch(function (err) {
+								_syncException("An error occur processing inbound client-side changes", datum, err)
+									.then(_sendChanges.bind(null, datum));
+							})
+							.finally(recurse);
+
+					} else {
+						$rootScope.sync.inProgress = false;
+						noTransactionCache.dropAllSynced()
+							.then(resolve)
+							.catch(reject)
+							.finally(function () {
+								$rootScope.sync.inProgress = false;
+							});
+					}
+				}
+
+				noTransactionCache.getAllPending()
+					.then(function (resp) {
+						data = resp;
+						console.log("Local changes: " + (!!resp ? resp.length : 0));
+
+						$rootScope.sync.inProgress = !!data.length;
+
+						if ($rootScope.sync.inProgress) {
+							recurse();
+						} else {
+							resolve();
+						}
+
+					})
+					.catch(function (err) {
+						console.error(err);
+					});
+			});
+		}
+
+		function runChecks() {
+			stopMonitoringLocalChanges();
+
+			digestLocalChanges()
+				.then(function () {
+					console.log("Changes digested");
 
 				})
 				.catch(function (err) {
-					console.error(err);
-				});
-		});
-	}
-
-	function runChecks() {
-		stopMonitoringLocalChanges();
-
-		digestLocalChanges()
-			.then(function () {
-				console.log("Changes digested");
-
-			})
-			.catch(function (err) {
-				console.error(err.message, err.error);
-			})
-			.finally(monitorLocalChanges);
-	}
-
-	function stateChanged(n) {
-		var fns = {
-				"connected": function () {
-					runChecks();
-				},
-				"disconnected": function () {
-					stopMonitoringLocalChanges();
-				},
-				"connecting": function () {
-
-				},
-				"undefined": angular.noop
-			},
-			fn = fns[n];
-
-		fn();
-	}
-
-	this.configure = function () {
-		var config = noConfig.current.noSync,
-			dsConfig = config.noDataSource,
-			provider = $injector.get(dsConfig.dataProvider);
-
-		$rootScope.sync = noInfoPath.NoSyncData.fromJSON(noLocalStorage.getItem(noSync_lastSyncVersion));
-
-		db = provider.getDatabase(dsConfig.databaseName);
-
-
-		$rootScope.$watch("sync.state", stateChanged);
-
-		return $q.when(true);
-	};
-
-	this.connect = function () {
-		var config = noConfig.current.noSync,
-			initialLoad = true;
-
-		socket = io(config.url, {
-			extraHeaders: {
-				Authorization: "Bearer " + noLoginService.user.access_token
-			}
-		});
-
-		//Map socket.io events to Angular events
-		socket.on("connect", function () {
-			socket.emit('authenticate', {
-					token: noLoginService.user.access_token
+					console.error(err.message, err.error);
 				})
-				.on('authenticated', function () {
-					// if (!initialLoad) noNotificationService.appendMessage("Connection to Data Transaction Coordinator Service successful.", {
-					// 	id: "connected",
-					// 	type: "success"
-					// });
-					initialLoad = false;
-					$rootScope.sync.update("state", "connected");
-					$rootScope.$apply();
-				})
-				.on('unauthorized', function (msg) {
-					// noNotificationService.appendMessage("Failed to authenticate with Data Transaction Coordinator Service.", {
-					// 	id: "unauthorized",
-					// 	type: "warning"
-					// });
-					console.log("unauthorized: " + JSON.stringify(msg.data));
-					throw new Error(msg.data.type);
-				});
-		});
+				.finally(monitorLocalChanges);
+		}
 
-		socket.on(noSync_lastSyncVersion, monitorRemoteChanges);
+		function stateChanged(n) {
+			var fns = {
+					"connected": function () {
+						runChecks();
+					},
+					"disconnected": function () {
+						stopMonitoringLocalChanges();
+					},
+					"connecting": function () {
 
-		socket.on("connect_error", function (err) {
-			// if (!initialLoad) noNotificationService.appendMessage("Lost connection to Data Transaction Coordinator Service.", {
-			// 	id: "disconnected",
-			// 	type: "danger",
-			// 	ttl: "2"
-			// });
-			initialLoad = false;
-			$rootScope.sync.update("state", "disconnected");
-			$rootScope.sync.update("error", err);
-			$rootScope.$apply();
-		});
+					},
+					"undefined": angular.noop
+				},
+				fn = fns[n];
 
-		socket.on("connect_timeout", function (err) {
-			$rootScope.sync.update("state", "disconnected");
-			$rootScope.$apply();
-		});
+			fn();
+		}
 
-		socket.on("reconnect", function (count) {
-			$rootScope.sync.update("state", "disconnected");
-			$rootScope.sync.update("attempts", count);
-			$rootScope.$apply();
-		});
+		this.configure = function () {
+			var config = noConfig.current.noSync,
+				dsConfig = config.noDataSource,
+				provider = $injector.get(dsConfig.dataProvider);
 
-		socket.on("reconnect_attempt", function () {
-			$rootScope.sync.update("state", "connecting");
-			$rootScope.$apply();
-		});
+			$rootScope.sync = noInfoPath.NoSyncData.fromJSON(noLocalStorage.getItem(noSync_lastSyncVersion));
 
-		socket.on("reconnecting", function (count) {
-			$rootScope.sync.update("state", "connecting");
-			$rootScope.sync.update("attempts", count);
-			$rootScope.$apply();
-		});
-
-		socket.on("reconnect_error", function (err) {
-			$rootScope.sync.update("state", "disconnected");
-			$rootScope.sync.update("error", "err");
-			$rootScope.$apply();
-		});
-
-		socket.on("reconnect_failed", function (count) {
-			$rootScope.sync.update("state", "disconnected");
-			$rootScope.$apply();
-		});
-
-		return $q.when(true);
-	};
-}
+			db = provider.getDatabase(dsConfig.databaseName);
 
 
-angular.module("noinfopath.sync")
-	.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLoginService", "noTransactionCache", "lodash", "noDataSource", "noHTTP", "noPrompt", "noNotificationService", "noTemplateCache", "PubSub", "noMimeTypes", NoSyncService]);
+			$rootScope.$watch("sync.state", stateChanged);
+
+			return $q.when(true);
+		};
+
+		this.connect = function () {
+			var config = noConfig.current.noSync,
+				initialLoad = true;
+
+			socket = io(config.url, {
+				extraHeaders: {
+					Authorization: "Bearer " + noLoginService.user.access_token
+				}
+			});
+
+			//Map socket.io events to Angular events
+			socket.on("connect", function () {
+				socket.emit('authenticate', {
+						token: noLoginService.user.access_token
+					})
+					.on('authenticated', function () {
+						// if (!initialLoad) noNotificationService.appendMessage("Connection to Data Transaction Coordinator Service successful.", {
+						// 	id: "connected",
+						// 	type: "success"
+						// });
+						initialLoad = false;
+						$rootScope.sync.update("state", "connected");
+						$rootScope.$apply();
+					})
+					.on('unauthorized', function (msg) {
+						// noNotificationService.appendMessage("Failed to authenticate with Data Transaction Coordinator Service.", {
+						// 	id: "unauthorized",
+						// 	type: "warning"
+						// });
+						console.log("unauthorized: " + JSON.stringify(msg.data));
+						throw new Error(msg.data.type);
+					});
+			});
+
+			socket.on(noSync_lastSyncVersion, monitorRemoteChanges);
+
+			socket.on("connect_error", function (err) {
+				// if (!initialLoad) noNotificationService.appendMessage("Lost connection to Data Transaction Coordinator Service.", {
+				// 	id: "disconnected",
+				// 	type: "danger",
+				// 	ttl: "2"
+				// });
+				initialLoad = false;
+				$rootScope.sync.update("state", "disconnected");
+				$rootScope.sync.update("error", err);
+				$rootScope.$apply();
+			});
+
+			socket.on("connect_timeout", function (err) {
+				$rootScope.sync.update("state", "disconnected");
+				$rootScope.$apply();
+			});
+
+			socket.on("reconnect", function (count) {
+				$rootScope.sync.update("state", "disconnected");
+				$rootScope.sync.update("attempts", count);
+				$rootScope.$apply();
+			});
+
+			socket.on("reconnect_attempt", function () {
+				$rootScope.sync.update("state", "connecting");
+				$rootScope.$apply();
+			});
+
+			socket.on("reconnecting", function (count) {
+				$rootScope.sync.update("state", "connecting");
+				$rootScope.sync.update("attempts", count);
+				$rootScope.$apply();
+			});
+
+			socket.on("reconnect_error", function (err) {
+				$rootScope.sync.update("state", "disconnected");
+				$rootScope.sync.update("error", "err");
+				$rootScope.$apply();
+			});
+
+			socket.on("reconnect_failed", function (count) {
+				$rootScope.sync.update("state", "disconnected");
+				$rootScope.$apply();
+			});
+
+			return $q.when(true);
+		};
+	}
+
+	angular.module("noinfopath.sync")
+		.service("noSync", ["$injector", "$timeout", "$q", "$rootScope", "noLocalStorage", "noConfig", "noLoginService", "noTransactionCache", "lodash", "noDataSource", "noHTTP", "noPrompt", "noNotificationService", "noTemplateCache", "PubSub", "noMimeTypes", "noFileSystem", NoSyncService]);
 })(angular, io);
 
 //directives.js
@@ -849,7 +835,7 @@ angular.module("noinfopath.sync")
 		}])
 		.directive("noAlert", ["noConfig", "noPrompt", "noTemplateCache", "noSync", function(noConfig, noPrompt,noTemplateCache, noSync){
 			//<div class="no-flex horizontal flex-around flex-middle"><button class="btn btn-warning btn-xs btn-callback">Import Now</button><button class="btn btn-warning btn-xs">Maybe Later</button></div>
-			function _importChanges(version) {
+			function _importChanges(scope, version) {
 				noPrompt.hide();
 
 				noPrompt.show(
@@ -858,19 +844,25 @@ angular.module("noinfopath.sync")
 				);
 
 				if(version) {
-					noSync.force("rmEFR2", version, function(){
-						noPrompt.hide(250);
-					});
+					noSync.force("rmEFR2", version)
+						.then(function(){
+							scope.sync.finished();
+							noSync.updateSyncStatus();
+							noPrompt.hide(250);
+						});
 				} else {
-					noSync.importChanges("rmEFR2", function(){
-						noPrompt.hide(250);
-					});
+					noSync.importChanges("rmEFR2")
+						.then(function(){
+							scope.sync.finished();
+							noSync.updateSyncStatus();
+							noPrompt.hide(250);
+						});
 				}
 			}
 
-			function _promptCallback(e) {
+			function _promptCallback(scope, e) {
 				if($(e.target).attr("value") === "immport") {
-					_importChanges();
+					_importChanges(scope);
 				} else {
 					noPrompt.hide();
 				}
@@ -878,7 +870,7 @@ angular.module("noinfopath.sync")
 
 			function _promptCallbackDebug(scope, e) {
 				if($(e.target).attr("value") === "immport") {
-					_importChanges(scope.tmpVersion);
+					_importChanges(scope, scope.tmpVersion);
 				} else {
 					noPrompt.hide();
 				}
@@ -917,7 +909,7 @@ angular.module("noinfopath.sync")
 							noPrompt.show(
 								"Data Update Available",
 								tmpl,
-								_promptCallback,
+								_promptCallback.bind(null, scope),
 								{
 									showCloseButton: true,
 									showFooter: {

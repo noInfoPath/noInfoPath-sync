@@ -1,7 +1,7 @@
 //globals.js
 /*
 *	# noinfopath-sync
-*	@version 2.0.30
+*	@version 2.0.31
 *
 *	## Overview
 *	Provides data synchronization services.
@@ -109,11 +109,11 @@
 			},
 			set: function(v) {
 
-				_prevVersion = _version;
+				//_prevVersion = _version;
 				_version = v || _version;
 				_pending = true;
 				_inProgress = false;
-				_internalDate = new Date();
+				//_internalDate = new Date();
 			}
 		});
 
@@ -154,7 +154,11 @@
 		//Merge with data
 		if(data) {
 			//this.lastSyncTimestamp = data.lastSyncTimestamp || this.lastSyncTimestamp;
-			this.current = data.version;
+			//this.current = data.version;
+			_internalDate = new Date(data.lastSyncTimestamp);
+			_prevVersion  = data.previous;
+			_version = data.current;
+			_pending = data.pending;
 		}
 
 		/*
