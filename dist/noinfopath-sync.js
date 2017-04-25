@@ -20,7 +20,7 @@
 		//this.inProgress = false;
 		this.state = "connecting";
 
-		var _initializing = true;
+		var _initializing = false;
 		this.initialized= function() {
 			_initializing = false;
 		};
@@ -57,7 +57,7 @@
 		*/
 		Object.defineProperty(this, "needChanges", {
 			get: function(){
-				return _initializing ||  (this.previous.version > 0 && this.previous.version < this.previous.version);
+				return _initializing ||  (this.previous.version > 0 && this.previous.version < this.current.version);
 			}
 		});
 
@@ -432,6 +432,8 @@
 				if (sync.needChanges) {
 					console.info("Version update available for", namespace, "\n", sync.toString());
 					_askForChanges(version || sync.previous.version, namespace, deferred);
+				} else {
+					deferred.resolve();
 				}
 			} else {
 				throw "noSync:importChanges requires a a valid namespace.";

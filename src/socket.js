@@ -217,6 +217,8 @@
 				if (sync.needChanges) {
 					console.info("Version update available for", namespace, "\n", sync.toString());
 					_askForChanges(version || sync.previous.version, namespace, deferred);
+				} else {
+					deferred.resolve();
 				}
 			} else {
 				throw "noSync:importChanges requires a a valid namespace.";
