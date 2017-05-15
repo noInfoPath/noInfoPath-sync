@@ -167,19 +167,18 @@
 		*	Return a pure javascript object suitable for persistence in localStorage.
 		*/
 		this.toJSON = function() {
-			var ds = Object.getOwnPropertyDescriptors(this),
+			var ds = Object.getOwnPropertyNames(this),
 				o = {},
 				blacklist = ["attempts", "error", "inProgress", "state", "lastSync"];
-			for(var k in ds) {
-				var d = ds[k],
-					t = this[k],
+			ds.forEach(function(k, i){
+				var t = this[k],
 					f = angular.isFunction(t);
 
 
 				if(!f && blacklist.indexOf(k) === -1) {
 					o[k] = t;
 				}
-			}
+			}, this);
 			return JSON.stringify(o);
 		};
 
