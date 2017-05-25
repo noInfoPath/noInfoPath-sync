@@ -51,7 +51,7 @@
 			}
 
 			function _importFile(parentTable, change) {
-				if (!parentTable.noInfoPath.NoInfoPath_FileUploadCache) return;
+				//if (!parentTable.noInfoPath.NoInfoPath_FileUploadCache) return $q.when(true);
 
 				var parentSchema = parentTable.noInfoPath.parentSchema.config,
 					dsConfig = {
@@ -65,7 +65,7 @@
 
 				switch (change.operation) {
 					case "I":
-
+						// CREATE METADATA, THEN CREATE FILE
 						var fileObj = change.values,
 							url = noConfig.current.NOREST + "/aws/bucket/" + fileObj.ID + "." + noMimeTypes.fromMimeType(fileObj.type),
 							options = {
@@ -76,25 +76,47 @@
 								responseType: "arraybuffer"
 							};
 
-						return noHTTP.noRequest(url, options)
-							.then(function (resp) {
-								var file = new File([resp.data], fileObj.name, {
-									type: fileObj.type
-								});
+						return importDS.create(fileObj)
+							.then(function(resp){
+								noHTTP.noRequest(url, options)
+									.then(function (resp) {
+										var file = new File([resp.data], fileObj.name, {
+											type: fileObj.type
+										});
 
-								file.DocumentID = fileObj.ID;
+										file.DocumentID = fileObj.ID;
 
-								return noFileCache.noCreate(file); //importDS.createDocument(fileObj, file);
-								//console.log("File cached upstream.", schema);
+										return noFileCache.noCreate(file);
+									})
+									.catch(function (err) {
+										console.error(err);
+									});
 							})
 							.catch(function (err) {
 								console.error(err);
 							});
 
 					case "U":
-						return importDS.update(change.values);
+						// UPDATE METADATA, DO NOT WORRY ABOUT FILE. FILE CANNOT BE EDITED
+						return importDS.update(change.values)
+							.catch(function (err) {
+								console.error(err);
+							});
 					case "D":
-						return importDS.destroy(change.changedPKID);
+						// READ METADATA, THEN DELETE DOCUMENT, THEN DELETE FILE
+						return importDS.one(change.changedPKID)
+							.then(function(file){
+								return noFileCache.noDestroy(file)
+									.then(function(resp){
+										return importDS.destroy(change.changedPKID);
+									})
+									.catch(function (err) {
+										console.error(err);
+									});
+							})
+							.catch(function (err) {
+								console.error(err);
+							});
 				}
 			}
 
@@ -120,10 +142,15 @@
 							return;
 						}
 
-						//console.info("Syncing table", change.tableName);
-
-						table.noImport(change)
-							.then(_importFile.bind(null, table, change))
+						var func;
+						if(table.noInfoPath.NoInfoPath_FileUploadCache){
+							func = _importFile(table, change);
+						} else {
+							func = table.noImport(change);
+						}
+						//table.noImport(change)
+								//.then(_importFile.bind(null, table, change))
+						func
 							.then(_notify.bind(null, change))
 							.then(_recurse)
 							.catch(function (err) {
