@@ -11,7 +11,7 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "http://git.img.local/noinfopath-sync.git"
+		"url": "https://github.com/noInfoPath/noInfopath-sync.git"
 	},
 	"author": "noInfoPath <info@noInfoPath.org> (http://www.noinfopath.org/)",
 	"license": "MIT",
